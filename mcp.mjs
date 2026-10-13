@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Minimal dependency-free MCP stdio adapter; all project writes go through one daemon.
 import { StringDecoder } from 'node:string_decoder';
 import { agentTools, callAgentTool, STUDIO_VERSION } from './src/agent-tools.mjs';

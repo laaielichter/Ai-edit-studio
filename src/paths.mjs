@@ -20,6 +20,8 @@ import { readUserSettings } from './settings.mjs';
 /** Absolute path to the application source tree. */
 export const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
+// An npm install lives in node_modules, which npm may replace; keep user data in the home folder then.
+const INSTALLED_FROM_NPM = PROJECT_ROOT.split(path.sep).includes('node_modules');
 const DEFAULT_WINDOWS_DATA_ROOT = path.join(os.homedir(), 'Documents', 'AI Edit Studio');
 // The data folder chosen in the installer (src/settings.mjs) counts as explicitly selected.
 const envDataRoot = process.env.GAME_TRAILER_STUDIO_DATA_ROOT?.trim();
@@ -30,13 +32,16 @@ const configuredDataRoot = envDataRoot || installedDataRoot;
  * Root for jobs, temporary render data and finished trailers.
  *
  * Order: GAME_TRAILER_STUDIO_DATA_ROOT, the folder chosen in the installer,
- * then Documents\AI Edit Studio on Windows or .studio-data next to the app elsewhere.
+ * then Documents\AI Edit Studio on Windows, or on macOS/Linux ~/.ai-edit-studio for an npm install
+ * and .studio-data next to the app otherwise.
  */
 export const DATA_ROOT = path.resolve(
   configuredDataRoot ||
     (process.platform === 'win32'
       ? DEFAULT_WINDOWS_DATA_ROOT
-      : path.join(PROJECT_ROOT, '.studio-data')),
+      : INSTALLED_FROM_NPM
+        ? path.join(os.homedir(), '.ai-edit-studio')
+        : path.join(PROJECT_ROOT, '.studio-data')),
 );
 
 /** Extensions accepted by the media scanner, normalized to lowercase. */

@@ -125,7 +125,7 @@ export function buildFilter(plan, {
   fontFile,
   musicInputIndex,
   drawtext,
-  labelFile, label, endTitleFile, endTitle, logoInputIndex, gameGain, musicGain, vertical, cinematic,
+  labelFile, label, endTitleFile, endTitle, logoInputIndex, gameGain, musicGain, vertical, cinematic, fill = false,
   finish = normalizeFinish(),
   captionFiles = [],
   narrationInputIndex = null, narrationStart = 0, narrationGain = 1,
@@ -196,6 +196,9 @@ export function buildFilter(plan, {
       lines.push(`[bg${index}]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=bilinear,crop=${width}:${height},gblur=sigma=28,eq=brightness=-0.15[blur${index}]`);
       lines.push(`[fg${index}]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[fit${index}]`);
       lines.push(`[blur${index}][fit${index}]overlay=(W-w)/2:(H-h)/2,setsar=1,format=yuv420p[vq${index}]`);
+    } else if (fill) {
+      // Wide formats such as 21:9: fill the frame and crop the centre instead of adding black bars.
+      lines.push(`[${videoInput}]trim=duration=${duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2:flags=lanczos,crop=${width}:${height},setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[vq${index}]`);
     } else {
       lines.push(`[${videoInput}]trim=duration=${duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[vq${index}]`);
     }
@@ -479,7 +482,7 @@ export async function renderTrailer(plan, {
   title = '',
   music = '',
   label = '', endTitle = '', logo = '', gameGain = 1, musicGain = 0.24,
-  vertical = false, maxBytes = 0, software = false, cinematic = false,
+  vertical = false, maxBytes = 0, software = false, cinematic = false, fill = false,
   look = 'neutral', lookStrength = 0.7, exposure = 0, fadeIn = 0.2, fadeOut = 0.65,
   duckMusic = false, reduceRumble = false,
   sourceChannel = 'stereo', narration = '', narrationStart = 0, narrationTrimStart = 0, narrationGain = 1,
@@ -622,7 +625,7 @@ export async function renderTrailer(plan, {
     return b.length >= 2 ? b : null;
   })();
   const filterOption = file => (ffmpegInfo.capabilities.fileOptions === false ? ['-filter_complex_script', file] : ['-/filter_complex', file]);
-  const filterBase = { width, height, fps: outputFps, fontFile, drawtext: ffmpegInfo.capabilities.drawtext, labelFile, label, vertical, cinematic, colors, logoPosition, logoScale, logoOpacity, fontsDir,
+  const filterBase = { width, height, fps: outputFps, fontFile, drawtext: ffmpegInfo.capabilities.drawtext, labelFile, label, vertical, cinematic, fill, colors, logoPosition, logoScale, logoOpacity, fontsDir,
     lutFile, lutStrength, progressBar, programDuration: total, legacyTemperature,
     captionStyle: ['box', 'bold', 'minimal'].includes(captionStyle) ? captionStyle : 'box', captionPosition: ['low', 'middle', 'high'].includes(captionPosition) ? captionPosition : 'low' };
   let videoInputs = [], audioInputs = [], segmentReport = null, segmentIntro = null, segmentOutro = null;
@@ -775,7 +778,7 @@ export async function renderTrailer(plan, {
     width, height, fps: outputFps, title: cleanedTitle, titleFile, fontFile,
     musicInputIndex, drawtext: ffmpegInfo.capabilities.drawtext,
     labelFile, label, endTitleFile, endTitle, logoInputIndex,
-    gameGain: Math.max(0, Math.min(2, Number(gameGain))), musicGain: Math.max(0, Math.min(1, Number(musicGain))), vertical, cinematic,
+    gameGain: Math.max(0, Math.min(2, Number(gameGain))), musicGain: Math.max(0, Math.min(1, Number(musicGain))), vertical, cinematic, fill,
     finish,
     captionFiles,
     narrationInputIndex, narrationStart, narrationGain,

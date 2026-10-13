@@ -7,14 +7,32 @@ import { normalizeCaptions } from '../public/captions.js';
 import { newClipId, LIMITS, overlapOf, normalizeTexts, normalizeOverlays, normalizeSections } from '../public/edit-ops.js';
 
 export const EXPORT_PRESETS = Object.freeze({
+  hd: { name: '720p', resolution: '1280x720', fps: 60 },
   landscape: { name: 'Widescreen', resolution: '1920x1080', fps: 60 },
-  vertical: { name: 'Vertical', resolution: '1080x1920', fps: 30, vertical: true },
-  whatsapp: { name: 'WhatsApp', resolution: '1280x720', fps: 30, maxBytes: 16 * 1024 ** 2 },
   qhd: { name: '1440p master', resolution: '2560x1440', fps: 60 },
   uhd: { name: '4K master', resolution: '3840x2160', fps: 60 },
+  ultrawide: { name: 'Ultrawide 21:9', resolution: '2560x1080', fps: 60, fill: true },
+  vertical720: { name: 'Vertical 720p', resolution: '720x1280', fps: 30, vertical: true },
+  vertical: { name: 'Vertical', resolution: '1080x1920', fps: 30, vertical: true },
+  vertical1440: { name: 'Vertical 1440p', resolution: '1440x2560', fps: 30, vertical: true },
+  vertical4k: { name: 'Vertical 4K', resolution: '2160x3840', fps: 30, vertical: true },
+  square720: { name: 'Square post 720', resolution: '720x720', fps: 30, vertical: true },
   square: { name: 'Square post', resolution: '1080x1080', fps: 30, vertical: true },
+  square1440: { name: 'Square post 1440', resolution: '1440x1440', fps: 30, vertical: true },
+  portrait720: { name: 'Portrait post 720', resolution: '720x900', fps: 30, vertical: true },
   portrait: { name: 'Portrait post', resolution: '1080x1350', fps: 30, vertical: true },
+  portrait1440: { name: 'Portrait post 1440', resolution: '1440x1800', fps: 30, vertical: true },
+  whatsapp: { name: 'WhatsApp', resolution: '1280x720', fps: 30, maxBytes: 16 * 1024 ** 2 },
 });
+/** Master formats (the main widescreen render) and the sizes offered for social formats. */
+export const MASTER_FORMATS = Object.freeze(['hd', 'landscape', 'qhd', 'uhd', 'ultrawide']);
+export const SOCIAL_SIZES = Object.freeze(['720', '1080', '1440', '4k']);
+/** Format id for a social shape (vertical, square, portrait) at a size; square/portrait top out at 1440. */
+export function socialFormat(shape, size = '1080') {
+  const suffix = { '720': '720', '1080': '', '1440': '1440', '4k': shape === 'vertical' ? '4k' : '1440' }[size] ?? '';
+  return `${shape}${suffix}`;
+}
+export const MAX_EXPORT_FORMATS = 12;
 export const DEFAULT_EXPORT_FORMATS = Object.freeze(['landscape', 'vertical', 'whatsapp']);
 
 function bounded(value, fallback, min, max, name) {
@@ -50,7 +68,9 @@ export function normalizeOptions(value = {}) {
   const style = value.style ?? 'flight';
   if (!['action', 'flight'].includes(style)) throw new StudioError('INVALID_STYLE', 'Choose action or flight.');
   const masterFormat = value.masterFormat ?? 'landscape';
-  if (!['landscape', 'qhd', 'uhd'].includes(masterFormat)) throw new StudioError('INVALID_EXPORT', 'Choose 1080p, 1440p or 4K.');
+  if (!MASTER_FORMATS.includes(masterFormat)) throw new StudioError('INVALID_EXPORT', 'Choose 720p, 1080p, 1440p, 4K or 21:9.');
+  const socialSize = String(value.socialSize ?? '1080');
+  if (!SOCIAL_SIZES.includes(socialSize)) throw new StudioError('INVALID_EXPORT', 'Social size: choose 720, 1080, 1440 or 4k.');
   for (const key of ['exportVertical', 'exportShare', 'exportSquare', 'exportPortrait']) {
     if (value[key] !== undefined && typeof value[key] !== 'boolean') throw new StudioError('INVALID_EXPORT', 'Invalid export choice.');
   }
@@ -71,7 +91,7 @@ export function normalizeOptions(value = {}) {
     template: text(value.template, 40),
     musicTrimStart: bounded(value.musicTrimStart, 0, 0, 600, 'Music starts at'),
     brief: text(value.brief, 2000),
-    masterFormat, exportVertical: value.exportVertical ?? true, exportShare: value.exportShare ?? true,
+    masterFormat, socialSize, exportVertical: value.exportVertical ?? true, exportShare: value.exportShare ?? true,
     exportSquare: value.exportSquare ?? false, exportPortrait: value.exportPortrait ?? false,
     title: text(value.title, 100),
     label: text(value.label ?? 'PRE-ALPHA FOOTAGE', 70),

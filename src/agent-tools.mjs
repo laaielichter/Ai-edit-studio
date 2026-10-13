@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { StudioError } from './paths.mjs';
-import { EXPORT_PRESETS } from './editing.mjs';
+import { EXPORT_PRESETS, MASTER_FORMATS, SOCIAL_SIZES, MAX_EXPORT_FORMATS } from './editing.mjs';
 import { TEMPLATES } from './templates.mjs';
 import { LIMITS } from '../public/edit-ops.js';
 const T = LIMITS.editSeconds, S = LIMITS.sourceSeconds, SRC = { type: 'integer', minimum: 0, maximum: LIMITS.sources - 1 };
@@ -22,7 +22,7 @@ const options = object({
   look: choice(['neutral', 'cinema', 'vivid', 'noir']), lookStrength: number(0, 1), exposure: number(-0.1, 0.1),
   fadeIn: number(0, 3), fadeOut: number(0, 3), duckMusic: bool, reduceRumble: bool,
   sourceChannel: choice(['stereo', 'left', 'right', 'mono']), narration: string(), narrationStart: number(0, T), narrationTrimStart: number(0, S), narrationGain: number(0, 2),
-  masterFormat: choice(['landscape', 'qhd', 'uhd']), exportVertical: bool, exportShare: bool, exportSquare: bool, exportPortrait: bool,
+  masterFormat: choice([...MASTER_FORMATS]), socialSize: choice([...SOCIAL_SIZES]), exportVertical: bool, exportShare: bool, exportSquare: bool, exportPortrait: bool,
   captions: { type: 'array', items: caption, maxItems: 300 }, captionOffset: number(-30, 30),
   captionStyle: choice(['box', 'bold', 'minimal']), captionPosition: choice(['low', 'middle', 'high']), musicTrimStart: number(0, 600),
   captionAnimation: choice(['none', 'karaoke', 'pop', 'highlight', 'words']), captionCase: choice(['normal', 'upper']),
@@ -112,7 +112,7 @@ export const agentTools = [
     object({ projectId, revision, platform: choice(['shorts', 'tiktok', 'reels', 'feed', 'youtube', 'trailer', 'vlog', 'film']), duration: number(5, T), pace: choice(['calm', 'balanced', 'punchy']),
       keep: choice(['highlights', 'story', 'most']), hook: bool, hookText: string(120), title: string(100), cta: string(100), label: string(70), brief: string(2000), transitions: bool, beatSync: bool,
       music: string(), brand: string(40), queue: bool, reframe: { anyOf: [{ type: 'string', enum: ['9:16', '1:1', '4:5'] }, { type: 'boolean', enum: [false] }] }, variants: bool, render: bool, preview: bool,
-      formats: { type: 'array', items: choice(Object.keys(EXPORT_PRESETS)), minItems: 1, maxItems: 7 }, author: string(40) }, ['projectId'])),
+      formats: { type: 'array', items: choice(Object.keys(EXPORT_PRESETS)), minItems: 1, maxItems: MAX_EXPORT_FORMATS }, author: string(40) }, ['projectId'])),
   spec('transcribe', 'Local speech recognition (whisper.cpp or FFmpeg whisper, on this computer) → word-level transcript for one or all sources; by default also captions that follow the edit. Asynchronous: poll studio_get. If no engine is installed the error explains the one-time setup.',
     object({ projectId, revision, sourceIndex: SRC, language: string(8), model: string(40), captions: bool, author: string(40) }, ['projectId'])),
   spec('transcript', 'Read a transcript (action "read": text with [mm:ss #wordIndex] stamps and/or words with inEdit flags, paged) or import one (action "import": SRT/VTT/whisper JSON file, or a words array from any ASR you ran yourself).',
@@ -196,7 +196,7 @@ export const agentTools = [
       key: { type: 'string', pattern: '^[A-G](#|b)?m?$' }, bpm: number(60, 180), seed: { type: 'integer', minimum: 0, maximum: 2147483647 }, drops: { anyOf: [{ type: 'string', enum: ['auto'] }, { type: 'array', maxItems: 16, items: number(0, T) }] },
       ending: choice(['hit', 'fade']), tail: number(1, 6), duration: number(4, 600), intensity: number(0, 1), stems: bool, musicGain: number(0, 1), apply: bool, dryRun: bool,
       file: string(), prompt: string(4000), extra: string(500), instrumental: bool, model: string(40), provider: choice(['elevenlabs']), apiKey: string(200), author: string(40) }, [])),
-  spec('render', 'Start export from the saved revision. Use preview first (previewFormat "vertical" for a 9:16 check). Formats are separate renders ("stems" = WAV stems: dialogue, voice, music, effects, mix); never uploads/publishes. Poll get for completion and inspect exports.', object({ projectId, revision, preview: bool, queue: bool, previewFormat: choice(['landscape', 'vertical', 'square', 'portrait']), formats: { type: 'array', items: choice([...Object.keys(EXPORT_PRESETS), 'stems']), minItems: 1, maxItems: 8 } }, ['projectId', 'revision'])),
+  spec('render', 'Start export from the saved revision. Use preview first (previewFormat "vertical" for a 9:16 check). Formats are separate renders (720p hd, 1080p landscape, qhd, uhd, ultrawide 21:9; vertical/square/portrait at 720, 1080, 1440 and vertical 4K; "stems" = WAV stems: dialogue, voice, music, effects, mix); never uploads/publishes. Poll get for completion and inspect exports.', object({ projectId, revision, preview: bool, queue: bool, previewFormat: choice(['landscape', 'vertical', 'square', 'portrait']), formats: { type: 'array', items: choice([...Object.keys(EXPORT_PRESETS), 'stems']), minItems: 1, maxItems: MAX_EXPORT_FORMATS + 1 } }, ['projectId', 'revision'])),
 ];
 
 /** OpenAPI 3.1 description of the HTTP tool surface, generated from the same schemas MCP serves. */

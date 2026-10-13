@@ -11,7 +11,7 @@ import { renderTrailer, renderStems, ensureSfxLibrary, filterPath, PREVIEW_SIZES
 import { quietRanges, BUILTIN_LUTS, cubeText, validateCube, autoTarget, colorCorrection, averageStats, musicFitPlan, SFX, autoSfx, normalizeSfx, audioRepairAdvice, normalizeAudioRepair, levelMatch, emphasisTimes, autoBrollPlan } from './polish.mjs';
 import { runProcess } from './process.mjs';
 import { proposeSilenceCuts } from './silence.mjs';
-import { normalizeOptions, validateClips, proposeEdit, EXPORT_PRESETS, DEFAULT_EXPORT_FORMATS, validateCaptionSources, validateOverlaySources } from './editing.mjs';
+import { normalizeOptions, validateClips, proposeEdit, EXPORT_PRESETS, DEFAULT_EXPORT_FORMATS, MAX_EXPORT_FORMATS, validateCaptionSources, validateOverlaySources } from './editing.mjs';
 import { applyOperations, coreClips, diffEdits, EditError, LIMITS, layout } from '../public/edit-ops.js';
 import { analyzeMusicFile, timelineBeats } from './beats.mjs';
 import { reviewEdit, describeTimeline, curvesFor, highlights as findHighlights, hookScore } from '../public/insights.js';
@@ -281,7 +281,7 @@ export async function exportProject(id, request = {}) {
   if (!project.plan) throw new StudioError('PLAN_REQUIRED', 'Create an edit proposal first.');
   const preview = request.preview === true;
   const formats = preview ? ['preview'] : (request.formats ?? DEFAULT_EXPORT_FORMATS);
-  if (!Array.isArray(formats) || !formats.length || formats.length > 7
+  if (!Array.isArray(formats) || !formats.length || formats.length > MAX_EXPORT_FORMATS + 1
     || new Set(formats).size !== formats.length || formats.some(f => !Object.hasOwn(EXPORT_PRESETS, f) && f !== 'stems' && !(preview && f === 'preview'))) {
     throw new StudioError('INVALID_EXPORT', 'Choose valid export formats.');
   }

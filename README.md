@@ -107,7 +107,15 @@ import, history/diff/restore, duplicate and render. Every agent change is a revi
 
 ## Install and start (Windows beta)
 
-**From the download zip (buyers):** unzip, double-click `Install-AI-Edit-Studio.cmd` (macOS/Linux: `./install.sh`)
+**With npm** (Node 20+ and FFmpeg needed):
+
+```bash
+npm install -g ai-edit-studio
+ai-edit-studio install      # data folder + connects Claude Code, Codex, Claude Desktop and Cursor
+ai-edit-studio serve        # starts the editor on http://127.0.0.1:32146
+```
+
+**From the download zip:** unzip, double-click `Install-AI-Edit-Studio.cmd` (macOS/Linux: `./install.sh`)
 and follow [INSTALL.md](INSTALL.md). It sets up the data folder and connects Claude Code, OpenAI Codex, Claude Desktop
 and Cursor in one go.
 

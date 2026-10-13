@@ -40,9 +40,9 @@ test('action proposal differs from long flight cut and stays within trims', () =
   const plan = proposeEdit({ sources: [source()] }, { style: 'action', duration: 30, trimStart: 2, trimEnd: 4 });
   assert.ok(plan.clips.length > 3); assert.ok(plan.clips.every(c => c.start >= 2 && c.end <= 76));
 });
-test('public beta defines all three promised output formats', () => {
+test('public beta keeps the three default output formats', () => {
   assert.deepEqual(DEFAULT_EXPORT_FORMATS, ['landscape', 'vertical', 'whatsapp']);
-  assert.equal(Object.keys(EXPORT_PRESETS).length, 7);
+  assert.equal(Object.keys(EXPORT_PRESETS).length, 16);
   assert.equal(EXPORT_PRESETS.vertical.resolution, '1080x1920');
   assert.equal(EXPORT_PRESETS.whatsapp.maxBytes, 16 * 1024 ** 2);
 });

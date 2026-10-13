@@ -511,7 +511,7 @@ function renderCues() {
 // ---------------------------------------------------------------- options form
 const NUMBER_FIELDS = ['duration', 'finaleSeconds', 'trimStart', 'trimEnd', 'lookStrength', 'exposure', 'fadeIn', 'fadeOut', 'musicTrimStart', 'narrationStart', 'narrationTrimStart', 'narrationGain', 'captionOffset'];
 const TEXT_FIELDS = ['title', 'label', 'endTitle', 'logo', 'music', 'narration', 'brief'];
-const SELECT_FIELDS = ['progressBar', 'masterFormat', 'sourceChannel', 'captionPosition', 'captionAnimation', 'captionCase', 'voiceEnhance'];
+const SELECT_FIELDS = ['progressBar', 'masterFormat', 'socialSize', 'sourceChannel', 'captionPosition', 'captionAnimation', 'captionCase', 'voiceEnhance'];
 const CHECK_FIELDS = ['duckMusic', 'reduceRumble', 'exportVertical', 'exportShare', 'exportSquare', 'exportPortrait'];
 function fillOptions() {
   const o = state.options;
@@ -668,8 +668,13 @@ async function action(name, body = {}, { label } = {}) {
   } catch (e) { if (e.code === 'REVISION_CONFLICT') conflict(); else toast(e.message); }
   finally { state.pending = false; state.inflight--; updateChrome(); }
 }
+// Same mapping as socialFormat() in src/editing.mjs: square and portrait top out at 1440.
+function socialFormat(shape, size) {
+  return shape + ({ '720': '720', '1080': '', '1440': '1440', '4k': shape === 'vertical' ? '4k' : '1440' }[size] ?? '');
+}
 function exportFormats() {
-  return [$('masterFormat').value, ...[['exportVertical', 'vertical'], ['exportShare', 'whatsapp'], ['exportSquare', 'square'], ['exportPortrait', 'portrait']].filter(([id]) => $(id).checked).map(([, f]) => f), ...($('exportStems')?.checked ? ['stems'] : [])];
+  const size = $('socialSize')?.value ?? '1080';
+  return [$('masterFormat').value, ...[['exportVertical', 'vertical'], ['exportShare', 'whatsapp'], ['exportSquare', 'square'], ['exportPortrait', 'portrait']].filter(([id]) => $(id).checked).map(([, f]) => f === 'whatsapp' ? f : socialFormat(f, size)), ...($('exportStems')?.checked ? ['stems'] : [])];
 }
 async function detectBeats() {
   if (!state.options.music) return toast(t('Choose a music file first.'));

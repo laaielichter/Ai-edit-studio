@@ -159,7 +159,9 @@ and can make A/B projects with the other hooks (`variants:true`). Every step is 
    `saturation`, `temperature`, `sharpen`, `denoise`.
 6. **Check**: `studio_review` → score, hook, issues; `fix.operations` can be sent to `studio_edit` unchanged.
 7. **Render**: `studio_render` `{preview:true, previewFormat:"vertical"}` → poll → `studio_storyboard {exportId}` to inspect the real
-   render → `studio_render {formats:[…]}` (`landscape`, `qhd`, `uhd`, `vertical`, `square`, `portrait`, `whatsapp`).
+   render → `studio_render {formats:[…]}` — widescreen `hd` (720p), `landscape` (1080p), `qhd` (1440p), `uhd` (4K),
+   `ultrawide` (21:9, 2560×1080, fills the frame); 9:16 `vertical720`, `vertical`, `vertical1440`, `vertical4k`; 1:1
+   `square720`, `square`, `square1440`; 4:5 `portrait720`, `portrait`, `portrait1440`; `whatsapp` (720p, ≤ 16 MiB).
 8. Need a variant? `studio_duplicate` gives a sandbox or a vertical cut next to the master.
 9. Reuse a look: `studio_style {action:"save", name, projectId}` / `{action:"apply", name, projectId, revision}` / `{action:"list"}` —
    the same named styles the editor shows. Captions from disk: `studio_captions_import {projectId, revision, file, sourceIndex}`.

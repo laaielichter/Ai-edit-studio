@@ -8,7 +8,8 @@ const $ = id => document.getElementById(id);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
 const EMOJI = { shorts: '▶', tiktok: '♪', reels: '◎', feed: '◼', youtube: '▷', trailer: '🎮', vlog: '🎥', film: '🎬' };
-const FORMAT_NAMES = { landscape: '16:9', qhd: '1440p', uhd: '4K', vertical: '9:16', square: '1:1', portrait: '4:5', whatsapp: 'WhatsApp' };
+const FORMAT_NAMES = { hd: '720p', landscape: '16:9', qhd: '1440p', uhd: '4K', ultrawide: '21:9', vertical720: '9:16 720', vertical: '9:16', vertical1440: '9:16 1440', vertical4k: '9:16 4K',
+  square720: '1:1 720', square: '1:1', square1440: '1:1 1440', portrait720: '4:5 720', portrait: '4:5', portrait1440: '4:5 1440', whatsapp: 'WhatsApp' };
 
 let ctx;
 const D = { platforms: [], brands: [], speech: null, words: [], meta: null, source: 0, selection: new Set(), anchor: null, hits: [], platform: 'shorts', loadedFor: '', setupTimer: null };

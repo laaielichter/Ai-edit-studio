@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — every output size, npm package, open source
+
+- **All formats**: 720p (`hd`, no size cap), 1080p, 1440p, 4K and 21:9 ultrawide (`ultrawide`, 2560×1080, crops to
+  fill the frame instead of black bars) as master; 9:16 at 720, 1080, 1440 and 4K; 1:1 and 4:5 at 720, 1080 and 1440.
+  The editor has a *Social size* choice next to *Master*; agents pass the format ids to `studio_render`
+  (up to 12 formats per render). Option `socialSize` (`720`, `1080`, `1440`, `4k`).
+- **npm**: `npm install -g ai-edit-studio` gives the commands `ai-edit-studio`, `ai-edit-studio-mcp` and
+  `ai-edit-studio-server`. An npm install keeps its data in `~/.ai-edit-studio` (macOS/Linux) or
+  `Documents\AI Edit Studio` (Windows), so updates never touch your projects.
+- **Open source** under the MIT license. The Windows default data folder is now `Documents\AI Edit Studio`.
+
 ## Unreleased — Claude Code + OpenAI Codex plugins, OpenAI API, installer and release zip, workflow skills
 
 - **Installer for buyers**: `node cli.mjs install` (double-click `Install-AI-Edit-Studio.cmd`, or `./install.sh`)
