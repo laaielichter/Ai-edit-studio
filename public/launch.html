@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark"><meta name="theme-color" content="#0c0f11">
+  <title>AI Edit Studio — monteer met je handen én met je agent</title>
+  <meta name="description" content="Lokale video-editor voor creators en gamebouwers. Echte tijdlijn, beat-sync, hook-check en een agent die via MCP meemonteert — met volledige geschiedenis.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23e3ef9f%22/%3E%3Cpath d=%22M12 9l11 7-11 7z%22 fill=%22%231a241b%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="launch.css">
+</head>
+<body>
+<header class="nav">
+  <a class="brand" href="launch.html"><span class="mark">▸</span>AI EDIT <b>STUDIO</b></a>
+  <nav><a href="#hoe">Hoe het werkt</a><a href="#agents">Agents</a><a href="#eerlijk">Eerlijk</a><a href="#faq">FAQ</a></nav>
+  <a class="btn primary small" href="/">Open de editor →</a>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="eyebrow">LOKALE VIDEO-EDITOR · VOOR CREATORS, GAMEBOUWERS & HUN AGENTS</p>
+    <h1>Monteer met je handen.<br><em>Laat je agent meemonteren.</em></h1>
+    <p class="lead">Een echte tijdlijn met de sneltoetsen die editors kennen, plus beat-sync, hook-check en een
+      automatische kwaliteitscontrole. Koppel Claude of een andere agent via MCP en zie elke wijziging live
+      in je tijdlijn verschijnen — met naam, samenvatting en één klik terug.</p>
+    <div class="cta"><a class="btn primary" href="/">Begin met je beelden →</a><a class="btn ghost" href="#agents">Zo werkt de agent</a></div>
+    <ul class="proof"><li><b>100% lokaal</b>geen upload, geen account</li><li><b>57 agent-tools</b>MCP · HTTP · OpenAPI · CLI</li><li><b>1 tijdlijn</b>16:9 · 9:16 · 1:1 · 4:5</li></ul>
+
+    <div class="demo" aria-hidden="true">
+      <div class="demo-monitor"><div class="frame"><span class="cap">Dit is het moment.</span></div><div class="agent-toast">🤖 agent → rev 12: hook vooraan · knippen op de beat</div></div>
+      <div class="demo-tl">
+        <div class="ruler"></div>
+        <div class="track v"><i></i><i class="flash"></i><i></i><i></i><i></i><i></i></div>
+        <div class="track a"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="track m"><span>♫ 128 BPM</span></div>
+        <div class="playhead"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pillars">
+    <article><span>⌨</span><h3>Snel als een NLE</h3><p>J/K/L, I/O, S om te knippen, Q/W om te trimmen, ripple delete, slip, mes, snappen op knippen, markers en beats.</p></article>
+    <article><span>🤖</span><h3>Agent-native</h3><p>Atomische edit-operaties op stabiele clip-ids, storyboard als beeld, review met toepasbare fixes. Elke agentstap is een revisie.</p></article>
+    <article><span>🔒</span><h3>Lokaal en eerlijk</h3><p>Je originelen worden alleen gelezen. Geen cloudmodel nodig voor de engine. Duidelijke grenzen in plaats van beloftes.</p></article>
+  </section>
+
+  <section id="hoe" class="steps">
+    <h2>Van map vol opnames naar een clip die blijft hangen</h2>
+    <ol>
+      <li><b>Kies een platform</b><span>TikTok, Reels, Shorts, YouTube, trailer, vlog of film — of een sjabloon als je zelf wilt monteren.</span></li>
+      <li><b>Sleep je beelden erin</b><span>Director-modus haalt dode stukken weg, kiest de sterkste hook, knipt op de beat, maakt ondertitels uit spraak en snijdt uit voor verticaal.</span></li>
+      <li><b>Verfijn op de tijdlijn</b><span>Of vraag je agent: "sterkste moment vooraan, knippen op de beat, vette ondertitels".</span></li>
+      <li><b>Check en exporteer</b><span>Live score en hook-meter, gerenderde preview, daarna alle formaten tegelijk.</span></li>
+    </ol>
+  </section>
+
+  <section class="features">
+    <h2>Alles wat een korte video sterker maakt</h2>
+    <div class="grid">
+      <article class="new"><h4>Geanimeerde ondertitels</h4><p>Karaoke, pop, markeerstift of woord-voor-woord — woordprecies uit het transcript, in je merkkleuren.</p></article>
+      <article class="new"><h4>Clipzoeker</h4><p>Eén lange video → de beste losse clips op hele zinnen, elk als eigen verticaal project, renders in de wachtrij.</p></article>
+      <article class="new"><h4>B-roll & beeld-in-beeld</h4><p>Lagen boven je montage terwijl het hoofdgeluid doorloopt. Plus J/L-cuts, punch-in-zooms, speed ramps en freeze frames.</p></article>
+      <article class="new"><h4>Pro-audio & kwaliteitscheck</h4><p>Stem verbeteren, −14 LUFS voor social, en een meting van de échte render: luidheid, piek, zwart en stilstand.</p></article>
+      <article class="new"><h4>✦ Director-modus</h4><p>Eén klik of één agent-call: van ruwe opnames naar een af montage per platform, inclusief renders. Elke stap is terug te draaien.</p></article>
+      <article class="new"><h4>Bewerken via tekst</h4><p>Lokale spraakherkenning (whisper.cpp). Schrap woorden, stopwoorden en pauzes in het transcript — de video volgt. Of bouw een papieren montage.</p></article>
+      <article class="new"><h4>Slim uitsnijden</h4><p>Voor 9:16, 1:1 en 4:5 volgt de uitsnede per shot de beweging en pant mee. Gemeten beweging, geen gezichtsherkenning.</p></article>
+      <article class="new"><h4>Publicatiepakket</h4><p>Thumbnails en covers van de scherpste frames, SRT/VTT, hoofdstukken en postteksten per platform — als concept, nooit automatisch gepost.</p></article>
+      <article class="new"><h4>Merkkits</h4><p>Logo, kleuren, lettertype, intro en outro in één kit — voor jou en je agent, toegepast in elke render.</p></article>
+      <article><h4>Beat-sync</h4><p>Lokale beatdetectie; knippen springen naar de dichtstbijzijnde tel of maat.</p></article>
+      <article><h4>Hook-check</h4><p>Meet of je eerste 3 seconden net zo veel energie hebben als de rest — met een fix.</p></article>
+      <article><h4>Kwaliteitscheck</h4><p>Jump cuts, flitsshots, zwart beeld, te snelle ondertitels, off-beat knippen.</p></article>
+      <article><h4>Sterkste momenten</h4><p>Gemeten pieken in beweging en geluid die nog niet in je montage zitten.</p></article>
+      <article><h4>Ondertitels die meeschuiven</h4><p>Gekoppeld aan brontijd: ze volgen knippen, volgorde en snelheid. Box, bold of minimal.</p></article>
+      <article><h4>Social zonder crop-ramp</h4><p>9:16, 1:1 en 4:5 met het volledige beeld op een vervaagde achtergrond, of een gekozen focuspunt.</p></article>
+      <article><h4>Muziek die wijkt</h4><p>Ducking onder spraak en gamegeluid, startpunt kiezen, normalisatie vóór volume.</p></article>
+      <article><h4>Historie</h4><p>Wie veranderde wat, "wat veranderde?" per revisie en niet-destructief terugzetten.</p></article>
+      <article><h4>Live voorvertoning</h4><p>Strakke knippen, muziek speelt mee, look en tekst als benadering — de render is leidend.</p></article>
+      <article><h4>Overgangen</h4><p>Dissolve, door zwart, wipes, schuiven, cirkel — per shot, met de duur die jij kiest.</p></article>
+      <article><h4>Kleur per shot</h4><p>Helderheid, contrast, verzadiging, temperatuur, verscherpen, ruis — live in de monitor, exact in de render.</p></article>
+      <article><h4>Titels & lower thirds</h4><p>Tekst op de tijdlijn met fade, vier stijlen, vijf posities. Plus stilstaande beelden als bron.</p></article>
+    </div>
+  </section>
+
+  <section id="agents" class="agents">
+    <div>
+      <h2>Je agent als assistent-editor</h2>
+      <p>Verbind Claude Code, Claude Desktop, Codex, Cursor of elke MCP-client — of elke agent met HTTP via <code>/api/agent/tools</code> en OpenAPI. De agent ziet je montage als
+        tekst (<code>studio_timeline</code>) én als beeld (<code>studio_storyboard</code>), monteert met
+        <code>studio_edit</code>, controleert met <code>studio_review</code> en rendert eerst een preview.</p>
+      <ul class="checks"><li>Alles-of-niets batches met <code>dryRun</code></li><li>Revisiecontrole: nooit over jouw werk heen</li><li>Live zichtbaar in je tijdlijn, met naam en samenvatting</li><li>Geen upload- of publicatietools</li></ul>
+    </div>
+    <pre class="code"><span class="c"># één regel in Claude Code</span>
+claude mcp add ai-edit-studio -- node mcp.mjs
+
+<span class="c">// lange video → 5 shorts, gerenderd, gecontroleerd</span>
+{ "action": "run", "name": "shorts-from-long", "projectId": "…" }
+
+<span class="c">// in één call van opnames naar TikTok-render</span>
+{ "platform": "tiktok", "hookText": "WACHT TOT HET EIND", "render": true }
+
+<span class="c">// of precies: studio_edit</span>
+{ "revision": 7, "summary": "Hook vooraan + beat-sync",
+  "operations": [
+    { "op": "move", "clip": "c4f2k09ab", "to": 0 },
+    { "op": "set",  "clip": "c4f2k09ab", "label": "hook" },
+    { "op": "beat_sync", "every": 2 },
+    { "op": "set_options", "options": { "captionStyle": "bold" } }
+  ] }</pre>
+  </section>
+
+  <section id="eerlijk" class="honest">
+    <h2>Wat het wel en niet is</h2>
+    <div class="two">
+      <div><h4>Wel</h4><ul><li>Een snelle editor voor socials, vlogs en korte films: tot 20 minuten, 200 shots, 24 bronnen</li><li>Metingen van beweging, geluid, scènewissels en beat</li><li>Ondertitels uit lokale spraakherkenning of je eigen SRT, die je montage volgen</li><li>H.264-exports die volledig gedecodeerd zijn gecontroleerd</li></ul></div>
+      <div><h4>Niet (nog)</h4><ul><li>Geen cloud-spraakherkenning: whisper.cpp draait lokaal en is een optionele download</li><li>Geen gezichtsvolgen of generatieve video</li><li>Geen garantie op viraal succes — wel betere basics</li><li>Geen volledige vervanger van een professionele NLE</li></ul></div>
+    </div>
+  </section>
+
+  <section id="faq" class="faq">
+    <h2>Vragen</h2>
+    <details><summary>Gaan mijn beelden naar de cloud?</summary><p>Nee. De engine draait op je eigen pc en leest je originelen alleen. Gebruik je een cloudagent, dan ontvangt die wel de toolresultaten en frames die hij opvraagt.</p></details>
+    <details><summary>Heb ik een AI-abonnement nodig?</summary><p>Niet voor de editor. Een agent is optioneel; gebruik degene die je al hebt.</p></details>
+    <details><summary>Kan een agent mijn werk verpesten?</summary><p>Elke wijziging is een revisie met auteur. Niet-opgeslagen werk wordt nooit overschreven en elke revisie is terug te zetten.</p></details>
+    <details><summary>Welke formaten exporteer ik?</summary><p>1080p, 1440p, 4K, 9:16, 1:1, 4:5 en een WhatsApp-versie onder 16 MiB — uit één tijdlijn.</p></details>
+  </section>
+
+  <section class="final">
+    <h2>Klaar om te monteren?</h2>
+    <a class="btn primary" href="/">Open AI Edit Studio →</a>
+    <p class="muted">Lokale bèta · Windows · Node 20+ en FFmpeg vereist</p>
+  </section>
+</main>
+<footer>AI Edit Studio · Director 0.4 bèta · Lokaal-first · Originelen blijven onaangeroerd</footer>
+</body></html>

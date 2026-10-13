@@ -1,0 +1,16 @@
+{
+  "name": "ai-edit-studio",
+  "owner": {
+    "name": "AI Edit Studio"
+  },
+  "metadata": {
+    "description": "AI Edit Studio: local-first video editing tools and workflow skills for agents, editors and creators."
+  },
+  "plugins": [
+    {
+      "name": "ai-edit-studio",
+      "source": "./",
+      "description": "Local-first video editing for agents and creators: shorts, clips from long videos, talking heads, game trailers, render QC and publish packs."
+    }
+  ]
+}

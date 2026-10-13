@@ -1,0 +1,50 @@
+# Tests on real Windows, macOS and Linux machines: unit tests, then the full buyer flow from the release zip
+# (installer → agent connection → auto-edit + render → render QC → uninstall). See tools/e2e-release.mjs.
+name: CI
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Install FFmpeg (macOS) — the complete, keg-only build buyers are told to install
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg-full
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Codex plugin is up to date
+        run: node tools/sync-codex-plugin.mjs --check
+      - name: Unit tests
+        env:
+          GAME_TRAILER_STUDIO_DATA_ROOT: ${{ runner.temp }}/studio-data
+          GAME_TRAILER_STUDIO_ALLOW_CUSTOM_DRIVE: '1'
+        run: node --test
+      - name: Install flow from the release zip
+        run: node tools/e2e-release.mjs
+      - name: Build release zip
+        if: runner.os == 'Linux'
+        run: node tools/build-release.mjs
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: release
+          path: dist/

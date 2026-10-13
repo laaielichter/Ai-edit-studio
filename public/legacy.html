@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#090b10">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'">
+  <title>AI Edit Studio — opnameconsole</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Ga naar de inhoud</a>
+
+  <div class="backdrop" aria-hidden="true">
+    <span class="backdrop__flare backdrop__flare--one"></span>
+    <span class="backdrop__flare backdrop__flare--two"></span>
+    <span class="backdrop__grid"></span>
+  </div>
+
+  <header class="app-header">
+    <a class="brand" href="#main-content" aria-label="AI Edit Studio, naar hoofdpagina">
+      <span class="brand__mark" aria-hidden="true">GTS</span>
+      <span>
+        <strong>AI Edit Studio</strong>
+        <small>Lokale montageconsole</small>
+      </span>
+    </a>
+
+    <div class="header-actions">
+      <div id="connection-status" class="connection-status is-checking" role="status" aria-live="polite">
+        <span class="connection-status__dot" aria-hidden="true"></span>
+        <span class="connection-status__text">API controleren</span>
+      </div>
+      <button id="refresh-all" class="button button--ghost button--compact" type="button">
+        <span aria-hidden="true">↻</span>
+        Alles vernieuwen
+      </button>
+    </div>
+  </header>
+
+  <main id="main-content" class="workspace">
+    <section class="panel create-panel" aria-labelledby="create-title">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Nieuwe productie</p>
+          <h1 id="create-title">Maak een trailer van je gameplay</h1>
+          <p class="panel-intro">Kies je bronmateriaal en laat de lokale analyse de sterkste scènes, beweging en audiomomenten selecteren.</p>
+        </div>
+        <span class="local-badge">100% lokaal</span>
+      </div>
+
+      <form id="job-form" class="job-form" novalidate>
+        <div class="form-grid form-grid--two">
+          <div class="field">
+            <label for="project">Project</label>
+            <input id="project" name="project" type="text" autocomplete="off" required maxlength="120" placeholder="Bijv. Mijn game">
+            <small>Naam waaronder deze productie wordt bewaard.</small>
+          </div>
+
+          <div class="field">
+            <label for="title">Titel in de trailer</label>
+            <input id="title" name="title" type="text" autocomplete="off" maxlength="160" placeholder="Bijv. Air Rescue — Official Trailer">
+            <small>Mag leeg blijven als je geen titelkaart wilt.</small>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="input">Footagepad</label>
+          <input id="input" name="input" class="path-input" type="text" autocomplete="off" spellcheck="false" required placeholder="D:\Captures of D:\Captures\vlucht-01.mp4">
+          <small>Een lokaal videobestand of map met opnames. De bron wordt alleen gelezen.</small>
+        </div>
+
+        <div class="option-grid">
+          <fieldset class="choice-group">
+            <legend>Duur</legend>
+            <label class="choice-card">
+              <input type="radio" name="duration" value="15">
+              <span>15 sec</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="duration" value="30">
+              <span>30 sec</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="duration" value="60" checked>
+              <span>60 sec</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="duration" value="90">
+              <span>90 sec</span>
+            </label>
+          </fieldset>
+
+          <div class="field">
+            <label for="style">Montagestijl</label>
+            <select id="style" name="style">
+              <option value="action">Actie — snel en krachtig</option>
+              <option value="cinematic">Cinematic — filmisch ritme</option>
+              <option value="gameplay">Gameplay — helder en speelbaar</option>
+              <option value="showcase">Showcase — wereld en details</option>
+              <option value="air-combat">Air combat — jets en helikopters</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="music">Muziekbestand <span class="optional">optioneel</span></label>
+          <input id="music" name="music" class="path-input" type="text" autocomplete="off" spellcheck="false" placeholder="D:\Music\trailer-track.wav">
+          <small>Gebruik alleen muziek waarvoor je de rechten hebt.</small>
+        </div>
+
+        <div class="form-grid form-grid--output">
+          <div class="field field--wide">
+            <label for="output">Uitvoerbestand</label>
+            <input id="output" name="output" class="path-input" type="text" autocomplete="off" spellcheck="false" placeholder="D:\Videos\trailer.mp4">
+            <small>Laat leeg om automatisch een veilig uitvoerpad binnen de jobmap te gebruiken.</small>
+          </div>
+
+          <div class="field">
+            <label for="resolution">Resolutie</label>
+            <select id="resolution" name="resolution">
+              <option value="1920x1080">1920 × 1080</option>
+              <option value="2560x1440" selected>2560 × 1440</option>
+              <option value="3840x2160">3840 × 2160</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fps">Framerate</label>
+            <select id="fps" name="fps">
+              <option value="30">30 fps</option>
+              <option value="60" selected>60 fps</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="submit-row">
+          <label class="switch-control" for="preview">
+            <input id="preview" name="preview" type="checkbox" checked>
+            <span class="switch" aria-hidden="true"></span>
+            <span>
+              <strong>Eerst een preview</strong>
+              <small>Snelle proefversie vóór de eindrender</small>
+            </span>
+          </label>
+
+          <button id="create-job" class="button button--primary" type="submit">
+            <span class="button__label">Trailerproductie starten</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+
+        <p id="form-message" class="form-message" role="alert"></p>
+      </form>
+    </section>
+
+    <aside class="right-column" aria-label="Systeem en producties">
+      <section class="panel status-panel" aria-labelledby="system-title">
+        <div class="section-heading section-heading--row">
+          <div>
+            <p class="eyebrow">Systeemcheck</p>
+            <h2 id="system-title">Lokale engine</h2>
+          </div>
+          <button id="refresh-doctor" class="icon-button" type="button" aria-label="Systeemstatus vernieuwen" title="Systeemstatus vernieuwen">↻</button>
+        </div>
+
+        <div id="doctor-summary" class="doctor-summary is-loading" role="status" aria-live="polite">
+          <span class="doctor-summary__icon" aria-hidden="true">•••</span>
+          <span>
+            <strong>Dependencies controleren</strong>
+            <small>Even geduld</small>
+          </span>
+        </div>
+        <ul id="dependency-list" class="dependency-list" aria-label="Dependency-status"></ul>
+      </section>
+
+      <section class="panel capture-panel" aria-labelledby="capture-title">
+        <div class="section-heading section-heading--row">
+          <div>
+            <p class="eyebrow">Live capture</p>
+            <h2 id="capture-title">Gameplay opnemen</h2>
+          </div>
+          <span id="capture-status-pill" class="status-pill status-neutral">Gestopt</span>
+        </div>
+
+        <form id="capture-form" class="capture-form" novalidate>
+          <div class="field">
+            <label for="capture-process">Procesnaam</label>
+            <div class="inline-field">
+              <input id="capture-process" name="capture-process" type="text" list="process-options" autocomplete="off" spellcheck="false" required placeholder="Bijv. bf6.exe">
+              <button id="search-processes" class="button button--ghost button--compact" type="button">Zoek processen</button>
+            </div>
+            <datalist id="process-options"></datalist>
+            <small id="process-search-status" role="status" aria-live="polite">Zoek een actief gameproces of vul de naam zelf in.</small>
+          </div>
+
+          <div class="capture-options">
+            <div class="field">
+              <label for="capture-project">Project</label>
+              <input id="capture-project" name="capture-project" type="text" autocomplete="off" required maxlength="120" placeholder="Bijv. Battlefield 6">
+            </div>
+            <div class="field">
+              <label for="capture-fps">Opnameframerate</label>
+              <select id="capture-fps" name="capture-fps">
+                <option value="60" selected>60 fps</option>
+                <option value="120">120 fps</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="capture-actions">
+            <button id="start-capture" class="button button--record" type="submit">
+              <span class="record-dot" aria-hidden="true"></span>
+              Start opname
+            </button>
+            <button id="stop-capture" class="button button--ghost" type="button" disabled>
+              <span aria-hidden="true">■</span>
+              Stop opname
+            </button>
+          </div>
+          <p id="capture-message" class="form-message" role="alert"></p>
+        </form>
+
+        <dl class="capture-meta" aria-label="Actieve opnamestatus">
+          <div><dt>Backend</dt><dd id="capture-backend">—</dd></div>
+          <div><dt>Duur</dt><dd id="capture-duration">00:00:00</dd></div>
+          <div class="capture-meta__path"><dt>Pad</dt><dd id="capture-path">—</dd></div>
+          <div id="capture-error-row" class="capture-meta__error" hidden><dt>Fout</dt><dd id="capture-error">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel jobs-panel" aria-labelledby="jobs-title">
+        <div class="section-heading section-heading--row">
+          <div>
+            <p class="eyebrow">Wachtrij</p>
+            <h2 id="jobs-title">Producties</h2>
+          </div>
+          <div class="job-toolbar">
+            <label class="poll-control" for="auto-poll">
+              <input id="auto-poll" type="checkbox" checked>
+              Live
+            </label>
+            <button id="refresh-jobs" class="icon-button" type="button" aria-label="Producties vernieuwen" title="Producties vernieuwen">↻</button>
+          </div>
+        </div>
+
+        <div id="jobs-loading" class="empty-state">
+          <span class="spinner" aria-hidden="true"></span>
+          <p>Producties laden…</p>
+        </div>
+        <div id="jobs-empty" class="empty-state" hidden>
+          <span class="empty-state__mark" aria-hidden="true">＋</span>
+          <p>Nog geen producties</p>
+          <small>Je eerste trailer verschijnt hier.</small>
+        </div>
+        <ul id="jobs-list" class="jobs-list" aria-label="Productielijst"></ul>
+      </section>
+    </aside>
+
+    <section id="job-detail" class="panel detail-panel" aria-labelledby="detail-title">
+      <div class="detail-header">
+        <div>
+          <p class="eyebrow">Geselecteerde productie</p>
+          <h2 id="detail-title">Selecteer een productie</h2>
+          <p id="detail-subtitle" class="detail-subtitle">Voortgang, waarschuwingen en bestanden worden hier getoond.</p>
+        </div>
+        <div class="detail-actions">
+          <span id="detail-status" class="status-pill status-neutral">Niet geselecteerd</span>
+          <button id="refresh-detail" class="button button--ghost button--compact" type="button" disabled>
+            <span aria-hidden="true">↻</span>
+            Vernieuwen
+          </button>
+        </div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-label">
+          <span>Voortgang</span>
+          <strong id="progress-value">0%</strong>
+        </div>
+        <progress id="progress-track" class="progress-track" aria-label="Productievoortgang" value="0" max="100">0%</progress>
+        <p id="progress-stage" class="progress-stage">Wacht op een selectie</p>
+      </div>
+
+      <dl id="job-meta" class="job-meta">
+        <div><dt>Project</dt><dd>—</dd></div>
+        <div><dt>Duur</dt><dd>—</dd></div>
+        <div><dt>Formaat</dt><dd>—</dd></div>
+        <div><dt>Bijgewerkt</dt><dd>—</dd></div>
+      </dl>
+
+      <div class="detail-grid">
+        <section class="detail-card" aria-labelledby="warnings-title">
+          <div class="detail-card__heading">
+            <h3 id="warnings-title">Waarschuwingen</h3>
+            <span id="warnings-count" class="count-badge">0</span>
+          </div>
+          <ul id="warnings-list" class="message-list">
+            <li class="muted-item">Geen waarschuwingen.</li>
+          </ul>
+        </section>
+
+        <section class="detail-card" aria-labelledby="artifacts-title">
+          <div class="detail-card__heading">
+            <h3 id="artifacts-title">Bestanden</h3>
+            <span id="artifacts-count" class="count-badge">0</span>
+          </div>
+          <ul id="artifacts-list" class="artifact-list">
+            <li class="muted-item">Nog geen bestanden beschikbaar.</li>
+          </ul>
+        </section>
+
+        <section class="detail-card detail-card--logs" aria-labelledby="logs-title">
+          <div class="detail-card__heading">
+            <h3 id="logs-title">Proceslog</h3>
+            <span id="logs-count" class="count-badge">0</span>
+          </div>
+          <ol id="logs-list" class="log-list">
+            <li class="muted-item">Nog geen logregels.</li>
+          </ol>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+  <footer class="app-footer">
+    <span>AI Edit Studio</span>
+    <span>Footage blijft op deze pc</span>
+  </footer>
+</body>
+</html>

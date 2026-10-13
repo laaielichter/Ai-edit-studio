@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ai-edit-studio": {
+      "command": "node",
+      "args": [
+        "-e",
+        "const fs=require('fs'),os=require('os'),path=require('path'),{pathToFileURL}=require('url');const f=process.platform==='win32'?path.join(process.env.APPDATA||path.join(os.homedir(),'AppData','Roaming'),'AI Edit Studio','settings.json'):path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'ai-edit-studio','settings.json');let c={};try{c=JSON.parse(fs.readFileSync(f,'utf8'))}catch{}const engine=process.env.AI_EDIT_STUDIO_HOME||c.engine;const launcher=engine&&path.join(engine,'plugin','mcp-launch.mjs');if(!launcher||!fs.existsSync(launcher)){console.error('AI Edit Studio engine not found. Run the AI Edit Studio installer (or: node cli.mjs codex-setup --plugin in the engine folder), or set AI_EDIT_STUDIO_HOME.');process.exit(1)}import(pathToFileURL(launcher).href).then(m=>m.main());"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 300
+    }
+  }
+}

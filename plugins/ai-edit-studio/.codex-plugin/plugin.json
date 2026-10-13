@@ -1,0 +1,41 @@
+{
+  "name": "ai-edit-studio",
+  "version": "0.10.0-beta.1",
+  "description": "Local-first video editor for Codex: 57 editing tools (auto-edit, edit by text, captions, reframe, music, render QC, publish packs) plus workflow skills for shorts, clips from long videos, talking heads and game trailers. Footage never leaves the computer.",
+  "author": {
+    "name": "AI Edit Studio"
+  },
+  "license": "MIT",
+  "keywords": [
+    "video",
+    "editing",
+    "shorts",
+    "tiktok",
+    "reels",
+    "captions",
+    "podcast",
+    "trailer",
+    "ffmpeg",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AI Edit Studio",
+    "shortDescription": "Edit video locally: shorts, clips, captions, music, QC.",
+    "longDescription": "A local video editor Codex can drive: raw footage or a long video in, checked platform-ready renders out (TikTok, Reels, Shorts, YouTube, Steam). Every change is an undoable revision, every render is measured (loudness, peaks, black frames). Nothing is uploaded or posted.",
+    "developerName": "AI Edit Studio",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "brandColor": "#FFB400",
+    "defaultPrompt": [
+      "Use the viral-short skill to make a TikTok from my clips with three hook variants.",
+      "Use the long-to-shorts skill to cut my podcast episode into five vertical clips.",
+      "Use the quality-gate skill to check my last render before I post it."
+    ]
+  }
+}

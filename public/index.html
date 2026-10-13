@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark"><meta name="theme-color" content="#0c0f11">
+  <title>AI Edit Studio — edit with your hands and with your agent</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23e3ef9f%22/%3E%3Cpath d=%22M12 9l11 7-11 7z%22 fill=%22%231a241b%22/%3E%3C/svg%3E"><link rel="stylesheet" href="studio.css"><script src="studio.js" type="module"></script>
+</head>
+<body>
+<a class="skip" href="#app">Skip to the editor</a>
+<header class="topbar">
+  <a class="brand" href="/" title="Home"><span class="mark" aria-hidden="true">▸</span><span class="brand-name">AI EDIT <b>STUDIO</b></span><small>DIRECTOR 0.9</small></a>
+  <div class="project-bar" id="project-bar" hidden>
+    <span id="project-title" class="project-title"></span>
+    <span id="revision" class="chip" title="Saved revision"></span>
+    <span id="dirty" class="chip warn" hidden title="Ctrl+S to save">● Unsaved</span>
+    <span id="agent-live" class="chip agent" hidden title="An agent changed this project"></span>
+  </div>
+  <div class="top-actions">
+    <div class="action-group" id="edit-actions" hidden>
+      <button id="undo" class="tool" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+      <button id="redo" class="tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+      <button id="save" class="ghost" title="Save (Ctrl+S)">Save</button>
+      <button id="auto-edit-open" class="magic" title="Director mode: one click from footage to a finished, platform-ready edit">✦ Auto-edit</button>
+      <button id="preview" class="secondary" title="Rendered preview with look, text and mix (Ctrl+Enter)">▷ Preview</button>
+      <button id="export" class="primary" title="Export the selected package">Export ↗</button>
+    </div>
+    <button id="shortcuts-button" class="tool" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">⌨</button>
+    <select id="lang" class="lang" aria-label="Language" title="Language"><option value="en">EN</option><option value="nl">NL</option></select>
+    <span id="connection" class="connection">Connecting…</span>
+  </div>
+</header>
+
+<div id="app">
+  <!-- ============ WELCOME ============ -->
+  <section id="welcome" class="welcome">
+    <div class="hero">
+      <p class="eyebrow">LOCAL AI EDITOR · FOR CREATORS, GAME DEVELOPERS & THEIR AGENTS</p>
+      <h1>From raw footage<br>to a clip that <em>sticks.</em></h1>
+      <p class="lead">A real timeline with the shortcuts editors know. Transitions, colour, titles, beat sync, hook check and an
+        automatic quality review. And an agent that edits with you — via MCP, HTTP or terminal, with your approval and full history.</p>
+      <div class="hero-actions"><button id="welcome-new" class="primary big">Start with your footage <span>→</span></button>
+        <button id="welcome-agent" class="ghost big">Connect your agent</button><a class="ghost big" href="launch.html">Product page ↗</a></div>
+      <ul class="proof">
+        <li><b>100% local</b> No upload, no account, originals stay untouched</li>
+        <li><b>Agent-native</b> 57 tools via MCP, HTTP/OpenAPI and CLI · atomic edits, storyboard & review</li>
+        <li><b>Edit once</b> 16:9, 9:16, 1:1, 4:5 and WhatsApp from one timeline · up to 20 minutes</li>
+      </ul>
+    </div>
+    <div class="welcome-grid">
+      <section><div class="section-label">START FROM A TEMPLATE</div><div id="template-cards" class="template-cards"></div></section>
+      <section><div class="section-label">RECENT PROJECTS</div><div id="recent-projects" class="recent"></div></section>
+    </div>
+  </section>
+
+  <!-- ============ EDITOR ============ -->
+  <section id="editor" class="editor" hidden>
+    <aside class="left panel" aria-label="Media">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="sources" class="active">Sources</button>
+        <button role="tab" data-tab="moments">Moments</button>
+        <button role="tab" data-tab="projects">Projects</button>
+      </nav>
+      <div class="tab-body" data-panel="sources"><div id="source-list" class="source-list"></div>
+        <p class="help">Click a source to open it in the source monitor. Set <kbd>I</kbd>/<kbd>O</kbd> and insert with <kbd>,</kbd> (at the playhead) or <kbd>.</kbd> (at the end). Hatched = already used.</p></div>
+      <div class="tab-body" data-panel="moments" hidden>
+        <section class="clip-finder"><h4>✂ Find clips <small>long video → shorts</small></h4>
+          <div class="two"><label>How many<input id="clips-count" type="number" min="1" max="20" value="5"></label><label>For<select id="clips-platform"><option value="tiktok">TikTok</option><option value="reels">Reels</option><option value="shorts">Shorts</option><option value="feed">Feed 4:5</option><option value="youtube">YouTube</option></select></label></div>
+          <div class="two"><label>Shortest · s<input id="clips-min" type="number" min="3" max="600" value="15"></label><label>Longest · s<input id="clips-max" type="number" min="5" max="1200" value="60"></label></div>
+          <div class="row-actions"><button id="clips-find" class="secondary" type="button">Find clips</button><button id="clips-make" class="ghost" type="button" disabled>Make projects + render all</button></div>
+          <div id="clips-list" class="clips-list"></div>
+        </section>
+        <div id="moments" class="moments"></div>
+        <p class="help">Measured motion, loudness and scene changes — not story understanding. Always watch for yourself.</p></div>
+      <div class="tab-body" data-panel="projects" hidden><button id="new-project" class="secondary wide">＋ New project</button><div id="projects" class="projects"></div></div>
+    </aside>
+
+    <section class="center" aria-label="Monitor">
+      <div class="monitor-head">
+        <div class="seg" role="group" aria-label="Monitor mode">
+          <button id="mode-program" class="active" title="Play the edit">Program</button>
+          <button id="mode-source" title="View a source and set I/O">Source</button>
+        </div>
+        <span id="player-label" class="muted small">No media</span>
+        <div class="seg" role="group" aria-label="Aspect preview" id="aspect-seg">
+          <button data-aspect="16:9" class="active">16:9</button><button data-aspect="9:16">9:16</button><button data-aspect="1:1">1:1</button><button data-aspect="4:5">4:5</button>
+        </div>
+      </div>
+      <div class="monitor" id="monitor">
+        <div class="stage" id="stage">
+          <canvas id="stage-bg" class="stage-bg" aria-hidden="true"></canvas>
+          <video id="video-a" preload="auto" playsinline></video>
+          <video id="video-b" preload="auto" playsinline></video>
+          <img id="stage-img" class="stage-img" alt="" hidden>
+          <video id="stage-layer" class="stage-layer" muted playsinline preload="auto" hidden></video>
+          <div id="overlay-title" class="overlay-title" hidden></div>
+          <div id="overlay-caption" class="overlay-caption" hidden></div>
+          <div id="overlay-end" class="overlay-end" hidden></div>
+          <div id="overlay-texts" class="overlay-texts" aria-hidden="true"></div>
+          <div id="monitor-empty" class="monitor-empty">Make an edit proposal or open a source.</div>
+        </div>
+        <div id="safe-frame" class="safe-frame" hidden></div>
+      </div>
+      <audio id="music-audio" preload="auto"></audio><audio id="narration-audio" preload="auto"></audio>
+      <div class="transport">
+        <button id="go-start" class="tool" title="Go to start (Home)" aria-label="Go to start">⏮</button>
+        <button id="prev-edit" class="tool" title="Previous cut (↑)" aria-label="Previous cut">⇤</button>
+        <button id="play" class="play" title="Play/pause (Space · J/K/L)" aria-label="Play">▶</button>
+        <button id="next-edit" class="tool" title="Next cut (↓)" aria-label="Next cut">⇥</button>
+        <span id="timecode" class="timecode">00:00.00</span><span class="muted small">/</span><span id="total-time" class="timecode dim">00:00.00</span>
+        <span id="source-marks" class="chip" hidden></span>
+        <span class="spacer"></span>
+        <label class="mini-toggle" title="Approximate look, colour and text live (the render is leading)"><input type="checkbox" id="live-look" checked> Live look</label>
+        <label class="mini-toggle" title="Play music along"><input type="checkbox" id="live-music" checked> Music</label>
+      </div>
+      <div id="source-tools" class="source-tools" hidden>
+        <button id="mark-in" class="ghost" title="In point (I)">[ In</button><button id="mark-out" class="ghost" title="Out point (O)">Out ]</button>
+        <button id="insert-playhead" class="secondary" title="Insert at the playhead (,)">Insert at playhead</button>
+        <button id="insert-end" class="secondary" title="Append at the end (.)">Append</button>
+        <button id="insert-layer" class="ghost" title="Put the In/Out range as B-roll or picture-in-picture above the edit at the playhead">Layer at playhead</button>
+        <div id="source-scrub" class="source-scrub" title="Source overview · hatched is already used"></div>
+      </div>
+    </section>
+
+    <aside class="right panel" aria-label="Inspector">
+      <nav class="tabs scroll" role="tablist">
+        <button role="tab" data-tab="shot" class="active">Shot</button>
+        <button role="tab" data-tab="check">Check <span id="score-badge" class="score-badge" hidden></span></button>
+        <button role="tab" data-tab="style">Style</button>
+        <button role="tab" data-tab="audio">Audio</button>
+        <button role="tab" data-tab="text">Text</button>
+        <button role="tab" data-tab="words">Words</button>
+        <button role="tab" data-tab="long">Long <span id="notes-count" class="score-badge"></span></button>
+        <button role="tab" data-tab="deliver">Export</button>
+        <button role="tab" data-tab="agent">Agent</button>
+        <button role="tab" data-tab="history">History</button>
+      </nav>
+
+      <div class="tab-body" data-panel="shot">
+        <div id="shot-empty" class="empty-state"><p>Select a shot on the timeline.</p><p class="help">Tip: <kbd>S</kbd> cuts at the playhead, <kbd>Q</kbd>/<kbd>W</kbd> trim the start/end to the playhead, <kbd>Delete</kbd> removes and closes the gap.</p>
+          <div class="analysis-cta" id="analysis-cta"><p><b>No edit yet?</b> Let the engine measure scenes, motion and sound and propose a first cut.</p><button id="analyze" class="primary wide">Make an edit proposal</button><button id="replan" class="ghost wide">Propose again with the current style</button></div>
+        </div>
+        <form id="shot-form" class="form" hidden onsubmit="return false">
+          <div class="shot-head"><strong id="shot-title">Shot</strong><span id="shot-meta" class="muted small"></span></div>
+          <label>Label <small>visible to you and your agent</small><input id="shot-label" maxlength="60" placeholder="e.g. hook, landing, reveal"></label>
+          <label>Source<select id="shot-source"></select></label>
+          <div class="two">
+            <label>In · source s<span class="nudge"><button type="button" data-nudge="start:-0.1">−</button><input id="shot-start" type="number" step="0.01" min="0"><button type="button" data-nudge="start:0.1">+</button></span></label>
+            <label>Out · source s<span class="nudge"><button type="button" data-nudge="end:-0.1">−</button><input id="shot-end" type="number" step="0.01" min="0"><button type="button" data-nudge="end:0.1">+</button></span></label>
+          </div>
+          <label class="range-label">Speed <output id="shot-speed-out">1.00×</output><input id="shot-speed" type="range" min="0.5" max="2" step="0.05"></label>
+          <label class="range-label">Source audio <output id="shot-gain-out">100%</output><input id="shot-gain" type="range" min="0" max="2" step="0.05"></label>
+          <fieldset class="framing"><legend>Framing</legend>
+            <div class="seg wide" role="group"><button type="button" data-framing="fit" class="active">Full frame</button><button type="button" data-framing="fill">Fill / crop</button></div>
+            <div class="focus-picker" id="focus-picker" title="Click to set the focus point"><img id="focus-img" alt=""><div id="focus-crop" class="focus-crop"></div><span id="focus-dot" class="focus-dot"></span></div>
+            <label class="range-label">Zoom <output id="shot-zoom-out">1.00×</output><input id="shot-zoom" type="range" min="1" max="2" step="0.05"></label>
+            <label class="range-label">Zoom at end <small>(Ken Burns)</small> <output id="shot-zoomEnd-out">1.00×</output><input id="shot-zoomEnd" type="range" min="1" max="2" step="0.05"></label>
+            <label class="toggle"><input id="shot-mirror" type="checkbox"> Mirror horizontally <small>(flips text/HUD too)</small></label>
+            <div class="row-actions"><button type="button" id="shot-reframe" class="ghost" title="Let the crop follow the motion in this shot (for 9:16)">◎ Follow the action</button><span id="shot-pan" class="muted small"></span></div>
+          </fieldset>
+          <fieldset class="framing"><legend>Transition into this shot</legend>
+            <div class="two"><label>Type<select id="shot-transition"></select></label><label>Duration · s<input id="shot-transition-seconds" type="number" min="0.1" max="3" step="0.1" value="0.5"></label></div>
+            <p class="help">A transition overlaps the previous shot; the edit gets that much shorter. The first shot has no transition.</p>
+          </fieldset>
+          <fieldset class="framing"><legend>Sound & motion</legend>
+            <label class="range-label">Sound cut <small>J ← → L</small> <output id="shot-audioShift-out">0.0 s</output><input id="shot-audioShift" type="range" min="-2" max="2" step="0.1" value="0"></label>
+            <p class="help">Negative: this shot's sound starts early under the previous picture (J-cut). Positive: the previous sound carries on (L-cut).</p>
+            <div class="row-actions"><button type="button" id="shot-punch" class="ghost" title="Split on the beat (or every 2 s) and alternate a tighter crop">Punch-in zooms</button><button type="button" id="shot-ramp" class="ghost" title="Stepped slow-down over the shot">Speed ramp ↘</button><button type="button" id="shot-freeze" class="ghost">Freeze frame</button></div>
+          </fieldset>
+          <fieldset class="framing"><legend>Stabilise &amp; talking head</legend>
+            <label class="range-label">Stabilise <small>shaky footage</small> <output id="shot-stabilize-out">off</output><input id="shot-stabilize" type="range" min="0" max="1" step="0.1" value="0"></label>
+            <div class="row-actions"><button type="button" id="tz-punch" class="ghost" title="Zoom changes on sentence starts, ! and ? (needs a transcript) or loud moments">Zooms on emphasis</button><button type="button" id="tz-push" class="ghost" title="A slow push-in or pull-out per shot">Slow push-ins</button><button type="button" id="tz-broll" class="ghost" title="Cutaways from sources not in the edit, where their name is said, else over calm stretches">Auto B-roll</button></div>
+            <p class="help">Zooms work on the selected shots (Ctrl+A selects all). B-roll uses recordings that are not in the edit; name them after what they show.</p>
+          </fieldset>
+          <fieldset class="framing"><legend>Layers above the edit <small>B-roll · picture-in-picture</small></legend>
+            <div id="overlay-list" class="overlay-list"></div>
+            <p class="help">In the Source monitor set In/Out and click “Layer at playhead”. The main sound keeps playing under B-roll.</p>
+          </fieldset>
+          <fieldset class="framing"><legend>Colour & image</legend>
+            <label class="range-label">Brightness <output id="shot-brightness-out">0</output><input id="shot-brightness" type="range" min="-0.3" max="0.3" step="0.01" value="0"></label>
+            <label class="range-label">Contrast <output id="shot-contrast-out">1.00</output><input id="shot-contrast" type="range" min="0.5" max="1.5" step="0.01" value="1"></label>
+            <label class="range-label">Saturation <output id="shot-saturation-out">1.00</output><input id="shot-saturation" type="range" min="0" max="2" step="0.01" value="1"></label>
+            <label class="range-label">Temperature <output id="shot-temperature-out">0</output><input id="shot-temperature" type="range" min="-1" max="1" step="0.02" value="0"></label>
+            <label class="range-label">Sharpen <output id="shot-sharpen-out">0</output><input id="shot-sharpen" type="range" min="0" max="1" step="0.05" value="0"></label>
+            <label class="toggle"><input id="shot-denoise" type="checkbox"> Denoise <small>(render only; not live)</small></label>
+            <div class="row-actions"><button type="button" id="shot-color-reset" class="ghost">Reset colour</button><button type="button" id="shot-color-copy" class="ghost">Copy to all shots</button></div>
+          </fieldset>
+          <div class="row-actions"><button type="button" id="shot-split" class="ghost">Cut at playhead</button><button type="button" id="shot-delete" class="ghost danger">Delete</button></div>
+          <p class="help">Shift-click selects several shots; speed, audio, colour and transitions then apply to all of them.</p>
+        </form>
+      </div>
+
+      <div class="tab-body" data-panel="check" hidden>
+        <div id="auto-report" class="auto-report" hidden></div>
+        <div class="score-card"><div id="score-ring" class="score-ring"><span id="score-value">–</span></div>
+          <div><strong id="score-title">Quality check</strong><p id="score-sub" class="help">Updates live while you edit.</p><div id="hook-meter" class="meter" title="Hook score: energy of the first 3 seconds"><span></span></div><small id="hook-text" class="muted"></small></div></div>
+        <div class="row-actions"><button id="fix-all" class="secondary" disabled>Apply all safe fixes</button></div>
+        <ol id="issues" class="issues"></ol>
+        <p class="help">Measured heuristics: motion, sound, black frames, timing. No judgement about story or taste.</p>
+      </div>
+
+      <div class="tab-body form" data-panel="style" hidden>
+        <label>Template<select id="template-select"><option value="">— Pick one to adopt its settings —</option></select></label>
+        <fieldset class="styles"><legend>Edit style <small>(applies to a new proposal)</small></legend>
+          <label><input type="radio" name="style" value="action"><span><b>↯ Punchy</b><small>Short shots, energy</small></span></label>
+          <label><input type="radio" name="style" value="flight" checked><span><b>≈ Story</b><small>Long shots, in order</small></span></label></fieldset>
+        <div class="two"><label>Target length · s<input id="duration" type="number" min="5" max="1200" step="1" value="30"></label><label>Finale · s<input id="finaleSeconds" type="number" min="0" max="1200" step="0.5" value="0" title="Keep the ending as one continuous shot"></label></div>
+        <div class="two"><label>Skip start · s<input id="trimStart" type="number" min="0" max="600" step="0.5" value="0"></label><label>Skip end · s<input id="trimEnd" type="number" min="0" max="600" step="0.5" value="0"></label></div>
+        <h3>Look</h3>
+        <div id="look-cards" class="look-cards" role="radiogroup" aria-label="Look"></div>
+        <label class="range-label">Strength <output id="lookStrength-out"></output><input id="lookStrength" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+        <label class="range-label">Exposure <output id="exposure-out"></output><input id="exposure" type="range" min="-0.1" max="0.1" step="0.005" value="0"></label>
+        <div class="two"><label>Fade in · s<input id="fadeIn" type="number" min="0" max="3" step="0.1" value="0.2"></label><label>Fade out · s<input id="fadeOut" type="number" min="0" max="3" step="0.1" value="0.65"></label></div>
+        <h3>LUT &amp; colour match</h3>
+        <div class="row-actions"><select id="lut-select" aria-label="LUT"><option value="">No LUT</option></select><button id="lut-import" class="ghost" type="button">Import .cube…</button></div>
+        <label class="range-label">LUT strength <output id="lut-strength-out">100%</output><input id="lut-strength" type="range" min="0" max="1" step="0.05" value="1"></label>
+        <div class="row-actions"><button id="color-auto" class="secondary" type="button">◐ Auto colour</button><button id="color-match" class="ghost" type="button" title="Make the other shots look like the selected shot">Match to selected shot</button></div>
+        <p class="help">LUTs show in renders and preview renders. Auto colour sets exposure, contrast and white balance per shot; matching makes cameras look alike. Both write the shot colour controls, so you can fine-tune.</p>
+        <h3>Brand</h3>
+        <label>Opening title<input id="title" maxlength="100" placeholder="Your story, brand or game"></label>
+        <label>Label · top right<input id="label" maxlength="70" placeholder="e.g. PRE-ALPHA FOOTAGE"></label>
+        <label>End text / call to action<input id="endTitle" maxlength="100" placeholder="e.g. Wishlist now"></label>
+        <label>Logo <small>PNG/JPG</small><span class="file-row"><input id="logo" placeholder="Local path"><button type="button" class="ghost" data-choose="logo">Choose…</button></span></label>
+        <h3>My styles <small>shared with your agent</small></h3>
+        <div class="row-actions"><select id="style-select" aria-label="Saved styles"><option value="">— Saved styles —</option></select><button id="style-apply" class="secondary" type="button">Apply</button><button id="style-save" class="ghost" type="button">Save current as style…</button></div>
+        <h3>Brand kit <small>logo, colours, font, intro/outro</small></h3>
+        <div class="row-actions"><select id="brand-select" aria-label="Brand kits"><option value="">— Brand kits —</option></select><button id="brand-apply" class="secondary" type="button">Apply</button></div>
+        <details id="brand-box" class="brand-box"><summary>Create or update a brand kit</summary>
+          <label>Name<input id="brand-name" maxlength="60" placeholder="e.g. My Game"></label>
+          <label>Logo<span class="file-row"><input id="brand-logo" placeholder="PNG/JPG path"><button type="button" class="ghost" data-pick="brand-logo">Choose…</button></span></label>
+          <div class="three"><label>Primary<input id="brand-primary" type="color" value="#101315"></label><label>Accent<input id="brand-accent" type="color" value="#f7cf72"></label><label>Text<input id="brand-text" type="color" value="#ffffff"></label></div>
+          <div class="two"><label>Logo position<select id="brand-logoPosition"><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option></select></label><label>Logo size<select id="brand-logoScale"><option value="0.09">Small</option><option value="0.13" selected>Medium</option><option value="0.18">Large</option></select></label></div>
+          <label>Font <small>TTF/OTF</small><span class="file-row"><input id="brand-font" placeholder="Font file path"><button type="button" class="ghost" data-pick="brand-font">Choose…</button></span></label>
+          <label>Intro clip <small>≤ 30 s</small><span class="file-row"><input id="brand-intro" placeholder="Video path"><button type="button" class="ghost" data-pick="brand-intro">Choose…</button></span></label>
+          <label>Outro clip <small>≤ 30 s</small><span class="file-row"><input id="brand-outro" placeholder="Video path"><button type="button" class="ghost" data-pick="brand-outro">Choose…</button></span></label>
+          <div class="two"><label>Call to action<input id="brand-cta" maxlength="100" placeholder="e.g. Wishlist now"></label><label>Hashtags<input id="brand-hashtags" maxlength="200" placeholder="indiegame, gamedev"></label></div>
+          <button id="brand-save" class="primary wide" type="button">Save brand kit</button>
+        </details>
+      </div>
+
+      <div class="tab-body form" data-panel="audio" hidden>
+        <label class="range-label">Source audio <output id="gameGain-out"></output><input id="gameGain" type="range" min="0" max="200" value="100"></label>
+        <h3>Music</h3>
+        <section class="music-gen" id="music-gen">
+          <h4>🎵 Compose music <small>made on this computer · free to use</small></h4>
+          <div class="two"><label>Style<select id="mg-style"></select></label><label>Mood<select id="mg-mood"><option value="">Auto</option><option value="uplifting">Uplifting</option><option value="emotional">Emotional</option><option value="epic">Epic</option><option value="dark">Dark</option><option value="chill">Chill</option><option value="dreamy">Dreamy</option></select></label></div>
+          <div class="two"><label>Drops at · s <small>auto = from your cuts and markers</small><input id="mg-drops" placeholder="auto" maxlength="80"></label><label>Ending<select id="mg-ending"><option value="hit">Final hit</option><option value="fade">Fade out</option></select></label></div>
+          <div class="row-actions"><button id="mg-compose" class="secondary" type="button">🎵 Compose</button><button id="mg-variation" class="ghost" type="button" title="Same style, a new melody and groove">🎲 New variation</button><label class="toggle"><input id="mg-stems" type="checkbox"> Stems</label></div>
+          <p id="mg-info" class="muted small"></p>
+          <details class="mg-online"><summary>Online: ElevenLabs Music <small>your API key</small></summary>
+            <p class="help">Only the text prompt and the length are sent; your video never leaves this computer. Uses your ElevenLabs credits.</p>
+            <label>Prompt <small>empty = made from the style, mood and drops above</small><textarea id="mg-prompt" rows="3" maxlength="4000" placeholder="e.g. energetic future bass with a big drop, no vocals"></textarea></label>
+            <label>API key <small id="mg-key-state"></small><span class="file-row"><input id="mg-key" type="password" autocomplete="off" placeholder="xi-…"><button id="mg-key-save" class="ghost" type="button">Save key</button></span></label>
+            <button id="mg-eleven" class="secondary wide" type="button">Generate with ElevenLabs</button>
+          </details>
+        </section>
+        <label>File <small>your own track (also downloads from Suno, Udio…)</small><span class="file-row"><input id="music" placeholder="Local audio file"><button type="button" class="ghost" data-choose="music">Choose…</button></span></label>
+        <label class="range-label">Music volume <output id="musicGain-out"></output><input id="musicGain" type="range" min="0" max="100" value="24"></label>
+        <label>Music starts at · s <small>skip an intro or start on the drop</small><input id="musicTrimStart" type="number" min="0" max="600" step="0.1" value="0"></label>
+        <div class="beat-box"><button id="detect-beats" class="secondary" type="button">♫ Detect beat</button><span id="beat-info" class="muted small">Not analysed yet</span></div>
+        <div class="row-actions"><button id="beat-sync" class="secondary" type="button" disabled title="Move cuts to the nearest beat">Snap cuts to beat</button><select id="beat-every" aria-label="Every"><option value="1">every beat</option><option value="2">every 2nd</option><option value="4">every bar</option></select></div>
+        <button id="music-fit" class="secondary wide" type="button">✂ Fit music to the edit <small>(ends on the beat)</small></button>
+        <label class="toggle"><input id="duckMusic" type="checkbox"> Music ducks under source audio and voice-over</label>
+        <label class="toggle"><input id="reduceRumble" type="checkbox"> Reduce low rumble</label>
+        <h3>Voice-over</h3>
+        <label>File<span class="file-row"><input id="narration" placeholder="WAV, MP3, M4A…"><button type="button" class="ghost" data-choose="narration">Choose…</button></span></label>
+        <div class="two"><label>Start in edit · s<input id="narrationStart" type="number" min="0" max="1200" step="0.1" value="0"></label><label>Skip start · s<input id="narrationTrimStart" type="number" min="0" max="7200" step="0.1" value="0"></label></div>
+        <label class="range-label">Volume <output id="narrationGain-out"></output><input id="narrationGain" type="range" min="0" max="2" step="0.05" value="1"></label>
+        <label>Source channels<select id="sourceChannel"><option value="stereo">Original stereo</option><option value="left">Left to both ears</option><option value="right">Right to both ears</option><option value="mono">Mono</option></select></label>
+        <p class="help">Silence tool: <button id="silence-proposal" class="link" type="button">shorten silences (proposal)</button>. Only use audio you have the rights to.</p>
+        <h3>Voice & loudness</h3>
+        <div class="two"><label>Voice enhance<select id="voiceEnhance"><option value="off">Off</option><option value="light">Light clean-up</option><option value="strong">Strong (podcast)</option></select></label>
+          <label>Loudness target<select id="loudness-target"><option value="-14">−14 LUFS · social & YouTube</option><option value="-16">−16 LUFS · podcast</option><option value="-23">−23 LUFS · broadcast</option><option value="off">Off</option></select></label></div>
+        <p class="help">Voice enhance removes hum and noise, adds presence and tames sharp S-sounds. The loudness target is measured on the final mix; check it with “Check quality” on an export.</p>
+        <h3>Repair</h3>
+        <div class="row-actions"><button id="repair-analyse" class="secondary" type="button">Analyse sound</button><span id="repair-info" class="muted small"></span></div>
+        <div class="two"><label>Mains hum<select id="repair-hum"><option value="0">Off</option><option value="50">50 Hz</option><option value="60">60 Hz</option></select></label>
+          <label class="range-label">Noise reduction <output id="repair-denoise-out">0%</output><input id="repair-denoise" type="range" min="0" max="1" step="0.1" value="0"></label></div>
+        <div class="row-actions"><label class="toggle"><input id="repair-declick" type="checkbox"> Clicks</label><label class="toggle"><input id="repair-declip" type="checkbox"> Clipping</label></div>
+        <div class="row-actions"><button id="repair-apply" class="secondary" type="button">Apply repair</button><button id="repair-level" class="ghost" type="button">Even out shot levels</button></div>
+        <h3>Sound effects <small id="sfx-count" class="muted"></small></h3>
+        <div class="row-actions"><button id="sfx-auto" class="secondary" type="button">✦ Add whooshes, pops &amp; hits</button><button id="sfx-clear" class="ghost" type="button">Clear</button></div>
+        <p class="help">Made on this computer (no samples downloaded): whooshes into transitions, pops on texts, hits on punch-ins and the finale. Hear them in a preview render.</p>
+      </div>
+
+      <div class="tab-body form" data-panel="text" hidden>
+        <h3>On-screen text <small id="text-count" class="muted"></small></h3>
+        <div class="row-actions"><button id="add-text" class="secondary" type="button">＋ Text at playhead</button><select id="add-text-style" aria-label="Style of new text"><option value="title">Title</option><option value="lower">Lower third</option><option value="big">Big & bold</option><option value="note">Note</option><option value="callout">Callout</option></select></div>
+        <div id="text-list" class="text-list"></div>
+        <label>Progress bar<select id="progressBar"><option value="off">Off</option><option value="bottom">Bottom</option><option value="top">Top</option></select></label>
+        <p class="help">Title cards and lower thirds sit on timeline time (they don't move with cuts). Captions below are tied to source time.</p>
+        <h3>Caption style</h3>
+        <div id="caption-styles" class="caption-styles" role="radiogroup" aria-label="Caption style"></div>
+        <label>Position<select id="captionPosition"><option value="low">Bottom</option><option value="middle">Middle</option><option value="high">Top</option></select></label>
+        <div class="two"><label>Animation <small>word by word</small><select id="captionAnimation"><option value="none">Static</option><option value="karaoke">Karaoke</option><option value="pop">Pop (2–3 words)</option><option value="highlight">Highlight marker</option><option value="words">One word at a time</option></select></label><label>Letters<select id="captionCase"><option value="normal">As written</option><option value="upper">UPPERCASE</option></select></label></div>
+        <h3>Captions <small id="caption-count" class="muted">0 lines</small></h3>
+        <div class="two"><label>Source<select id="caption-source"></select></label><label>Timing · s<input id="captionOffset" type="number" min="-30" max="30" step="0.1" value="0"></label></div>
+        <div class="row-actions"><button id="import-captions" class="secondary" type="button">Import SRT…</button><button id="clear-captions" class="ghost danger" type="button">Clear all</button></div>
+        <div id="cue-list" class="cue-list"></div>
+        <p class="help">Captions are tied to source time and follow cuts, order and speed. Make them from speech in the <b>Words</b> tab.</p>
+      </div>
+
+      <div class="tab-body form" data-panel="words" hidden>
+        <h3>Edit by text <small id="words-status" class="muted"></small></h3>
+        <div id="speech-box" class="speech-box"></div>
+        <div class="two"><label>Source<select id="words-source"></select></label><label>Language<select id="words-language"><option value="auto">Auto-detect</option><option value="en">English</option><option value="nl">Nederlands</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option></select></label></div>
+        <div class="row-actions"><button id="transcribe" class="secondary" type="button">🎙 Transcribe locally</button><button id="import-transcript" class="ghost" type="button">Import transcript…</button></div>
+        <input id="words-search" type="search" placeholder="Find words or a phrase…" aria-label="Find words">
+        <div class="row-actions"><button id="words-delete" class="secondary" type="button" disabled>Delete selected</button><button id="words-keep" class="ghost" type="button" disabled title="Paper edit: the timeline becomes only the selected passages">Keep only selected</button></div>
+        <div class="row-actions"><button id="words-fillers" class="ghost" type="button">Remove fillers</button><button id="words-pauses" class="ghost" type="button">Tighten pauses</button><button id="words-speed" class="ghost" type="button" title="Play pauses twice as fast instead of cutting them (without a transcript: the quiet stretches)">Speed up pauses ×2</button><label class="toggle"><input id="words-smooth" type="checkbox"> Soften cuts</label></div>
+        <div id="words" class="words" tabindex="0" aria-label="Transcript"></div>
+        <p class="help">Click a word to jump there; Shift-click selects a range. Struck-through words are not in the edit. Speech recognition runs on this computer; audio never leaves it.</p>
+      </div>
+
+      <div class="tab-body form" data-panel="long" hidden>
+        <h3>Outline <small id="outline-count" class="muted"></small></h3>
+        <div id="outline-list" class="outline-list"></div>
+        <div class="row-actions"><input id="outline-name" maxlength="60" placeholder="Section name" aria-label="Section name"><button id="outline-add" class="secondary" type="button">＋ Section at playhead</button></div>
+        <button id="outline-suggest" class="ghost wide" type="button">Suggest sections</button>
+        <h3>Search the footage</h3>
+        <div class="row-actions"><input id="search-query" type="search" maxlength="200" placeholder="What was said, a label, “action”…" aria-label="Search"><button id="search-run" class="secondary" type="button">Search</button></div>
+        <div id="search-results" class="hit-list"></div>
+        <h3>Fit to length</h3>
+        <div class="row-actions"><input id="fit-target" maxlength="10" placeholder="2:59" aria-label="Target length"><button id="fit-run" class="secondary" type="button">Fit</button><small id="fit-now" class="muted"></small></div>
+        <p class="help">Removes pauses, filler words and the weakest sentences first, then the weakest shots, then trims toward each shot's best part. Opening and finale stay.</p>
+        <h3>Check a part</h3>
+        <div class="row-actions"><select id="range-quality" aria-label="Quality"><option value="preview">Preview</option><option value="final">Final quality</option></select><button id="range-render" class="secondary" type="button">▷ Render 15 s around the playhead</button></div>
+        <p class="help">Set In/Out (I / O) to choose the part. Long edits render in cached segments, so a full render after a fix only redoes what changed.</p>
+        <h3>Review notes</h3>
+        <div class="row-actions"><textarea id="note-text" rows="2" maxlength="500" placeholder="Note at the playhead… (Ctrl+Enter)" aria-label="Note"></textarea><button id="note-add" class="secondary" type="button">Add</button></div>
+        <div id="notes-list" class="notes-list"></div>
+        <h3>Script → rough cut</h3>
+        <textarea id="script-text" rows="4" maxlength="100000" placeholder="One line per beat or quote. Needs a transcript (Words tab)." aria-label="Script"></textarea>
+        <button id="script-run" class="secondary wide" type="button">Build the rough cut</button>
+        <h3>Multicam</h3>
+        <div class="row-actions"><button id="sync-run" class="secondary" type="button">Sync by sound</button><label>Min s<input id="mc-min" type="number" min="1" max="30" step="0.5" value="2.5"></label><label>Max s<input id="mc-max" type="number" min="3" max="120" step="1" value="8"></label></div>
+        <div id="sync-result" class="sync-result"></div>
+        <button id="mc-run" class="secondary wide" type="button">Multicam edit: picture follows the speaker</button>
+        <h3>Hand off to another editor</h3>
+        <div id="handoff" class="row-actions"><button class="ghost" type="button" data-format="edl">EDL</button><button class="ghost" type="button" data-format="fcpxml">FCPXML</button><button class="ghost" type="button" data-format="otio">OTIO</button><button class="ghost" type="button" data-format="csv">CSV</button><button class="ghost" type="button" data-format="chapters">Chapters</button><select id="handoff-fps" aria-label="Frame rate"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select></div>
+        <p class="help">Premiere, Resolve and Avid read EDL; Final Cut and Resolve read FCPXML. They point at your original files; nothing is re-encoded.</p>
+        <h3>Proxies</h3>
+        <p id="proxy-status" class="help"></p>
+        <div class="row-actions"><button id="proxy-make" class="secondary" type="button">Make proxies</button><button id="proxy-remove" class="ghost" type="button" disabled>Remove</button></div>
+      </div>
+
+      <div class="tab-body form" data-panel="deliver" hidden>
+        <h3>Package</h3>
+        <label>Master<select id="masterFormat"><option value="landscape">1080p · 60 fps</option><option value="qhd">1440p · 60 fps</option><option value="uhd">4K · 60 fps</option></select></label>
+        <label class="toggle"><input id="exportVertical" type="checkbox" checked> 9:16 vertical <small>Shorts, Reels, TikTok</small></label>
+        <label class="toggle"><input id="exportSquare" type="checkbox"> 1:1 square</label>
+        <label class="toggle"><input id="exportPortrait" type="checkbox"> 4:5 portrait</label>
+        <label class="toggle"><input id="exportShare" type="checkbox" checked> WhatsApp · max. 16 MiB</label>
+        <label class="toggle"><input id="exportStems" type="checkbox"> Audio stems <small>dialogue, voice, music, effects, mix · WAV</small></label>
+        <button id="export-2" class="primary wide" type="button">Export package ↗</button>
+        <h3>Smart reframe</h3>
+        <div class="row-actions"><select id="reframe-aspect" aria-label="Aspect"><option value="9:16">9:16</option><option value="1:1">1:1</option><option value="4:5">4:5</option></select><button id="reframe-all" class="secondary" type="button">◎ Follow the action in every shot</button></div>
+        <p class="help">Per shot the crop follows where the motion is, and pans when it moves. Measured motion, not face tracking; your 16:9 master stays full frame.</p>
+        <h3>Publish pack</h3>
+        <label>Title on thumbnails<input id="publish-title" maxlength="80" placeholder="Uses your opening title"></label>
+        <div id="publish-platforms" class="check-chips"><label><input type="checkbox" value="youtube" checked> YouTube</label><label><input type="checkbox" value="shorts" checked> Shorts</label><label><input type="checkbox" value="tiktok" checked> TikTok</label><label><input type="checkbox" value="reels" checked> Reels</label><label><input type="checkbox" value="x"> X</label><label><input type="checkbox" value="linkedin"> LinkedIn</label><label><input type="checkbox" value="steam"> Steam</label></div>
+        <button id="publish-make" class="secondary wide" type="button">Make thumbnails, captions & post drafts</button>
+        <div id="publish-result" class="publish-result"></div>
+        <h3>Render queue <small id="queue-count" class="muted"></small></h3>
+        <div id="queue-list" class="queue-list"></div>
+        <h3>Exports <small id="export-count" class="muted"></small></h3>
+        <div class="row-actions"><button id="compare-last" class="ghost" type="button" title="The last two renders side by side, in sync">⇆ Compare last two renders</button></div>
+        <div id="exports" class="exports"></div>
+      </div>
+
+      <div class="tab-body form" data-panel="agent" hidden>
+        <h3>Vibe-edit with your agent</h3>
+        <label>What do you want to make?<textarea id="brief" maxlength="2000" rows="4" placeholder="Make a 30 s teaser: strongest moment first, cuts on the beat, vertical version with bold captions."></textarea></label>
+        <button id="copy-agent-brief" class="primary wide" type="button">Copy the brief for your agent</button>
+        <h3>Connect</h3>
+        <div class="seg wide" role="group" id="agent-client"><button data-client="claude-code" class="active">Claude Code</button><button data-client="desktop">MCP JSON</button><button data-client="http">HTTP / OpenAPI</button><button data-client="cli">Terminal</button></div>
+        <pre id="agent-config" class="code"></pre>
+        <button id="copy-agent-config" class="ghost wide" type="button">Copy</button>
+        <h3>Recipes <small>multi-step, one click</small></h3>
+        <div id="recipe-list" class="recipe-list"></div>
+        <div id="recipe-run" class="recipe-run" hidden></div>
+        <h3>Live activity</h3>
+        <ol id="agent-feed" class="feed"></ol>
+        <p class="help">The engine uploads nothing. A cloud agent does receive tool results and the frames it asks for. Every agent change is a revision you can roll back.</p>
+      </div>
+
+      <div class="tab-body" data-panel="history" hidden>
+        <ol id="history" class="history"></ol>
+        <div id="history-diff" class="diff" hidden></div>
+      </div>
+    </aside>
+
+    <section class="timeline-panel" aria-label="Timeline">
+      <div class="timeline-toolbar">
+        <div class="seg" role="group" aria-label="Tool"><button id="tool-select" class="active" title="Select / drag (V)">⬚ V</button><button id="tool-blade" title="Blade: click to cut (B)">✂ B</button></div>
+        <button id="tl-split" class="tool" title="Cut at playhead (S)">Cut</button>
+        <button id="tl-delete" class="tool" title="Ripple delete (Delete)">Delete</button>
+        <button id="tl-marker" class="tool" title="Marker at playhead (M)">◆ Marker</button>
+        <label class="mini-toggle" title="Snap to cuts, markers and beats (N)"><input type="checkbox" id="snap" checked> Snap</label>
+        <span id="range-chip" class="chip" hidden></span>
+        <span class="spacer"></span>
+        <span id="tl-summary" class="muted small"></span>
+        <button id="zoom-out" class="tool" title="Zoom out (−)" aria-label="Zoom out">−</button>
+        <input id="zoom" type="range" min="4" max="400" value="40" aria-label="Timeline zoom">
+        <button id="zoom-in" class="tool" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <button id="zoom-fit" class="tool" title="Fit (Shift+Z)">Fit</button>
+      </div>
+      <div class="timeline" id="timeline" tabindex="0" aria-label="Timeline: arrow keys move the playhead, S cuts">
+        <div class="track-heads"><div class="head ruler-head"></div><div class="head">◆</div><div class="head">V1</div><div class="head">A1</div><div class="head">♫</div><div class="head">T</div></div>
+        <div class="tracks-scroll" id="tracks-scroll">
+          <div class="tracks" id="tracks">
+            <div class="ruler" id="ruler"></div>
+            <div class="lane markers" id="lane-markers"></div>
+            <div class="lane video" id="lane-video"></div>
+            <div class="lane audio" id="lane-audio"></div>
+            <div class="lane music" id="lane-music"></div>
+            <div class="lane text" id="lane-text"></div>
+            <div class="playhead" id="playhead"><span></span></div>
+            <div class="range" id="range" hidden></div>
+            <div class="drop-indicator" id="drop-indicator" hidden></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+</div>
+
+<footer class="statusbar" role="status" aria-live="polite">
+  <span id="status-message">Ready</span><progress id="progress" max="100" value="0" hidden></progress><span id="progress-text"></span>
+  <span class="spacer"></span><span id="warnings" class="muted"></span><span id="storage" class="muted"></span>
+</footer>
+
+<dialog id="create-dialog"><form id="create-form" method="dialog">
+  <div class="dialog-heading"><div><p class="eyebrow">NEW PROJECT</p><h2>What are you making?</h2></div><button type="button" id="close-dialog" class="tool" aria-label="Close">×</button></div>
+  <label>Project name<input id="new-name" required maxlength="100" placeholder="For example My Game teaser"></label>
+  <div id="create-templates" class="template-cards compact" role="radiogroup" aria-label="Template"></div>
+  <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose video files"><span class="drop-icon">↥</span><strong>Drop your footage here</strong><span>or click to choose · MP4, MOV, MKV, WebM, PNG/JPG · max. 24</span></div>
+  <input id="file-picker" type="file" accept="video/*,.mkv,.png,.jpg,.jpeg,.webp" multiple hidden><div id="selected-files" class="selected-files"></div>
+  <details><summary>Link a local path, without a working copy</summary><label>One path per line<textarea id="new-paths" rows="3" placeholder="D:\Captures\flight.mp4"></textarea></label></details>
+  <label class="toggle"><input id="auto-analyze" type="checkbox" checked> Analyse right away and propose a first cut</label>
+  <label>Or let Director mode finish it for<select id="create-platform"><option value="">— I'll edit myself —</option></select></label>
+  <p id="create-message" role="status" class="help"></p>
+  <button id="create-submit" class="primary wide" type="submit">Open project <span>→</span></button>
+</form></dialog>
+
+<dialog id="auto-dialog"><form id="auto-form" method="dialog">
+  <div class="dialog-heading"><div><p class="eyebrow">DIRECTOR MODE</p><h2>One click to a finished edit</h2></div><button type="button" class="tool" data-close aria-label="Close">×</button></div>
+  <p class="help">Removes black and dead air, picks the strongest moments (or keeps nearly everything), tries three openings and keeps the strongest hook, adds transitions, cuts on the beat, makes captions from speech, fixes review issues and reframes for vertical. Every step is a revision you can undo.</p>
+  <div id="auto-platforms" class="template-cards compact" role="radiogroup" aria-label="Platform"></div>
+  <div class="three"><label>Length · s<input id="auto-duration" type="number" min="5" max="1200" step="1" placeholder="platform"></label><label>Pace<select id="auto-pace"><option value="">Platform</option><option value="punchy">Punchy</option><option value="balanced">Balanced</option><option value="calm">Calm</option></select></label><label>Footage<select id="auto-keep"><option value="">Platform</option><option value="highlights">Best moments</option><option value="story">Story order</option><option value="most">Keep nearly all</option></select></label></div>
+  <div class="two"><label>Hook text <small>first seconds</small><input id="auto-hook" maxlength="120" placeholder="e.g. WAIT FOR IT"></label><label>Call to action<input id="auto-cta" maxlength="100" placeholder="e.g. Follow for part 2"></label></div>
+  <label>Brand kit<select id="auto-brand"><option value="">— None —</option></select></label>
+  <label class="toggle"><input id="auto-render" type="checkbox" checked> Render the platform formats right away</label>
+  <label class="toggle"><input id="auto-variants" type="checkbox"> Also make A/B projects with the other hooks</label>
+  <p id="auto-message" role="status" class="help"></p>
+  <button id="auto-submit" class="primary wide" type="submit">✦ Make my edit</button>
+</form></dialog>
+
+<dialog id="shortcuts-dialog"><div class="dialog-heading"><div><p class="eyebrow">SHORTCUTS</p><h2>Edit with your keyboard</h2></div><button type="button" class="tool" data-close aria-label="Close">×</button></div>
+  <div class="shortcut-grid">
+    <div><h4>Playback</h4><dl><dt>Space</dt><dd>Play / pause</dd><dt>J K L</dt><dd>Back · stop · forward (L again = faster)</dd><dt>← →</dt><dd>1 frame</dd><dt>Shift + ← →</dt><dd>1 second</dd><dt>↑ ↓</dt><dd>Previous / next cut</dd><dt>Home End</dt><dd>Start / end</dd></dl></div>
+    <div><h4>Editing</h4><dl><dt>S</dt><dd>Cut at playhead</dd><dt>Q / W</dt><dd>Trim start / end to playhead</dd><dt>Delete</dt><dd>Ripple delete (shot or I/O range)</dd><dt>Alt + ← →</dt><dd>Shot earlier / later</dd><dt>V / B</dt><dd>Select / blade</dd><dt>Alt + drag</dt><dd>Slip: other footage, same length</dd></dl></div>
+    <div><h4>Marking</h4><dl><dt>I / O</dt><dd>In / out (source or timeline range)</dd><dt>X</dt><dd>Clear I/O</dd><dt>, / .</dt><dd>Insert source at playhead / at end</dd><dt>M</dt><dd>Marker</dd><dt>N</dt><dd>Snap on/off</dd></dl></div>
+    <div><h4>General</h4><dl><dt>Ctrl + Z / Shift + Z</dt><dd>Undo / redo</dd><dt>Ctrl + S</dt><dd>Save</dd><dt>Ctrl + Enter</dt><dd>Render preview</dd><dt>+ / − / Shift+Z</dt><dd>Zoom / fit</dd><dt>?</dt><dd>This overview</dd></dl></div>
+  </div>
+</dialog>
+
+<dialog id="agent-dialog"><div class="dialog-heading"><div><p class="eyebrow">AGENT</p><h2>Let your agent edit with you</h2></div><button type="button" class="tool" data-close aria-label="Close">×</button></div>
+  <ol class="steps-list"><li>Copy the configuration below into your agent (Claude Code, Claude Desktop, Codex, Cursor, any MCP client — or any HTTP agent via OpenAPI).</li><li>Open a project and copy the brief from the <b>Agent</b> tab.</li><li>Watch live: every agent change shows up as a revision in <b>History</b> and can be rolled back.</li></ol>
+  <pre id="agent-config-dialog" class="code"></pre><button id="copy-agent-config-dialog" class="primary wide" type="button">Copy configuration</button>
+</dialog>
+
+<input id="asset-picker" type="file" hidden>
+<input id="caption-picker" type="file" accept=".srt" hidden>
+<input id="transcript-picker" type="file" accept=".srt,.vtt,.json" hidden>
+<input id="brand-picker" type="file" hidden>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body></html>
