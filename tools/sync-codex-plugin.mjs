@@ -26,7 +26,7 @@ export async function expectedFiles() {
   files.set('.codex-plugin/plugin.json', `${JSON.stringify({
     name: 'ai-edit-studio',
     version: STUDIO_VERSION,
-    description: 'Local-first video editor for Codex: 57 editing tools (auto-edit, edit by text, captions, reframe, music, render QC, publish packs) plus workflow skills for shorts, clips from long videos, talking heads and game trailers. Footage never leaves the computer.',
+    description: 'Local-first video editor for Codex: 59 editing tools (auto-edit, edit by text, captions, reframe, music, render QC, publish packs) plus workflow skills for shorts, clips from long videos, talking heads and game trailers. Footage never leaves the computer.',
     author: { name: 'AI Edit Studio' },
     license: 'MIT',
     keywords: ['video', 'editing', 'shorts', 'tiktok', 'reels', 'captions', 'podcast', 'trailer', 'ffmpeg', 'mcp'],

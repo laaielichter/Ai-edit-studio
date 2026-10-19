@@ -2,7 +2,7 @@ name: Publish to MCP Registry
 
 # Lists the server in the official MCP Registry (registry.modelcontextprotocol.io).
 # The npm package must be published first (npm publish): the registry reads `mcpName` from it.
-# Run it from the Actions tab (Run workflow), or push a tag like v0.10.1.
+# Run it from the Actions tab (Run workflow), or push a tag like v0.11.0.
 on:
   workflow_dispatch:
   push:

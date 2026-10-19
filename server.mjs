@@ -13,7 +13,7 @@ import { listProjects, createProject, getProject, projectView, saveProject, anal
   autoEditProject, transcribeProject, importTranscript, readTranscript, textEditProject, reframeProject, publishPack, publishFile, listBrands, saveBrand, applyBrand, speechInfo,
   studioEvents, listQueue, cancelQueued, waitProject, findClipsProject, qcExport, freezeFrame,
   renderRange, fitDurationProject, sectionsProject, searchTool, assembleProject, syncProject, multicamProject, exportTimelineProject, commentsProject, proxiesProject,
-  lutProject, colorMatchProject, stabilizeProject, musicFitProject, audioRepairProject, sfxProject, autoZoomProject, autoBrollProject, compareProject, musicProject } from './src/studio.mjs';
+  lutProject, colorMatchProject, stabilizeProject, musicFitProject, audioRepairProject, sfxProject, autoZoomProject, autoBrollProject, compareProject, musicProject, storyApply } from './src/studio.mjs';
 import { listRecipes, saveRecipe, getRecipe, startRecipe, recipeRun, listRuns } from './src/recipes.mjs';
 import { setupSpeech } from './src/transcribe.mjs';
 import { PLATFORMS } from './src/autoedit.mjs';
@@ -203,6 +203,8 @@ async function routeApi(request, response, url) {
     if (method === 'GET') return json(response, 200, { ok: true, ...(await lutProject(null, { action: 'list' })) });
     if (method === 'POST') return json(response, 201, { ok: true, ...(await lutProject(null, { ...(await readJsonBody(request)), action: 'import' })) });
   }
+  if (method === 'POST' && pathname === '/api/studio/story/apply') return json(response, 200, { ok: true, ...(await storyApply({ ...(await readJsonBody(request)), action: 'build' })) });
+  { const m = pathname.match(/^\/api\/studio\/story\/builds\/([0-9a-f-]{36})$/); if (method === 'GET' && m) return json(response, 200, { ok: true, ...(await storyApply({ action: 'status', buildId: m[1] })) }); }
   if (method === 'GET' && pathname === '/api/studio/music/styles') return json(response, 200, { ok: true, ...(await musicProject(null, { action: 'styles' })) });
   if (method === 'POST' && pathname === '/api/studio/music/provider') return json(response, 200, { ok: true, ...(await musicProject(null, { ...(await readJsonBody(request)), action: 'provider' })) });
   if (pathname === '/api/studio/brands') {

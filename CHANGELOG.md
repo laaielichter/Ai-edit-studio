@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0 — story documents
+
+- **`studio_apply` and `studio_guide`** (59 tools): one JSON document (`aes.story/1`) becomes a finished short. Generated
+  title, counter, terminal, chips and end-card scenes plus footage, timed in beats so cuts land on the music grid, with
+  events, sfx, drops, on-screen text, delivery sizes and safe areas. `dryRun` returns the schedule and warnings; a build
+  runs in the background (`{action:"status", buildId}`) and ends in an ordinary project. Scenes render locally with
+  FFmpeg + libass; unchanged scenes are reused.
+
 ## Unreleased — every output size, npm package, open source
 
 - **All formats**: 720p (`hd`, no size cap), 1080p, 1440p, 4K and 21:9 ultrawide (`ultrawide`, 2560×1080, crops to

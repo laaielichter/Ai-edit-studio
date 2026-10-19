@@ -7,7 +7,7 @@ connects every app below that is on this computer — Claude Code (plugin), Code
 Cursor. Safe to run again; `node cli.mjs uninstall` removes the connections, never your projects. The sections below
 are for doing it by hand.
 
-One engine, the same 57 tools everywhere. Replace `C:\path\to\ai-edit-studio` with your folder.
+One engine, the same 59 tools everywhere. Replace `C:\path\to\ai-edit-studio` with your folder.
 
 ## Claude Code — plugin (recommended: tools + workflow skills + video-director agent)
 
@@ -80,7 +80,7 @@ Codex also reads this repo's `AGENTS.md` when you work inside the engine folder.
 ## OpenAI API — Responses API and Agents SDK
 
 - **Node, no dependencies:** `OPENAI_API_KEY=… node examples/openai/openai-agent.mjs --skill viral-short "Make a TikTok
-  from D:\clips\a.mp4 and b.mp4, promise: I built a game in 7 days"`. The model gets all 57 tools; calls run in the
+  from D:\clips\a.mp4 and b.mp4, promise: I built a game in 7 days"`. The model gets all 59 tools; calls run in the
   local engine; storyboards and frames go to the model as images so it can see the edit.
 - **Agents SDK (Python):** `pip install openai-agents`, then `python examples/openai/agents_sdk.py --skill long-to-shorts
   "…"` — the same MCP server over stdio.
