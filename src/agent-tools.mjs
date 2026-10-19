@@ -3,8 +3,9 @@ import { StudioError } from './paths.mjs';
 import { EXPORT_PRESETS, MASTER_FORMATS, SOCIAL_SIZES, MAX_EXPORT_FORMATS } from './editing.mjs';
 import { TEMPLATES } from './templates.mjs';
 import { LIMITS } from '../public/edit-ops.js';
+import { STORY_GUIDE } from './story.mjs';
 const T = LIMITS.editSeconds, S = LIMITS.sourceSeconds, SRC = { type: 'integer', minimum: 0, maximum: LIMITS.sources - 1 };
-export const STUDIO_VERSION = '0.10.1';
+export const STUDIO_VERSION = '0.11.0';
 
 const number = (minimum, maximum) => ({ type: 'number', minimum, maximum });
 const string = (maxLength = 1000) => ({ type: 'string', maxLength });
@@ -191,6 +192,8 @@ export const agentTools = [
     object({ tool: string(40), arguments: { type: 'object', properties: {}, additionalProperties: true }, projects: { anyOf: [{ type: 'string', enum: ['all'] }, { type: 'array', maxItems: 50, items: projectId }] }, match: string(100), stopOnError: bool }, ['tool'])),
   spec('compare', 'WORKFLOW: two renders side by side (or stacked) with labels, in sync, as a new export — A/B versions of one project (default: its last two renders) or against another project (otherProjectId). Asynchronous (studio_wait).',
     object({ projectId, a: projectId, b: projectId, otherProjectId: projectId, layout: choice(['side', 'stack']), audio: choice(['a', 'b', 'mix']), labelA: string(80), labelB: string(80) }, ['projectId'])),
+  spec('apply', 'STORY: build a whole short from one JSON document (aes.story/1; read studio_guide {topic:"story"} first). Generated title, counter, terminal, chips and end-card scenes plus your footage, timed in BEATS so every cut lands on the music grid; sfx, drops and on-screen text can hang on scene events. {story, dryRun:true} validates and returns the beat schedule, events and warnings (reading time, short shots, drops off the bar) without rendering. Without dryRun it starts a build and returns {buildId}; poll {action:"status", buildId} until done: result has projectId, revision and the renderFormat to give studio_render. The result is an ordinary project (edit it with studio_edit). Unchanged generated scenes are reused when you build again.', object({ story: { type: 'object', additionalProperties: true, properties: {}, description: 'aes.story/1 document: {version, name, deliver, size, safeArea, music:{bpm,style?,mood?,seed?,file?}, style, scenes:[...], drops?, sfx?, texts?}' }, dryRun: bool, action: choice(['build', 'status']), buildId: string(64), author: string(40) })),
+  spec('guide', 'Reference for building with the studio: topic "story" returns the aes.story/1 format (scene kinds, beat timing, events, delivery sizes, safe areas) with a complete example that passes studio_apply dryRun. Read only.', object({ topic: choice(['story']) }), true),
   spec('music', 'MUSIC for the edit. action "compose" (default): the local music engine composes and mixes an original track (no samples, no internet, free to use) exactly as long as the edit, with drops on given timeline seconds (default "auto": markers named drop/hit, else the end of the hook and a cut around 60 %) and a final hit at the end; style pop|trap|house|lofi|synthwave|cinematic, mood, key ("Am", "C"), bpm, seed (same seed = same track; new seed = new variation), stems:true for WAV stems. Sets options.music with an exact beat grid (beat_sync then snaps to the real beats). dryRun returns tempo map + sections without rendering. "use" {file}: your own audio file (also downloads from Suno/Udio etc.). "elevenlabs" {prompt?}: online generation with the user\'s own ElevenLabs key (only the prompt is sent). "styles": styles, moods, providers. "provider" {provider:"elevenlabs", apiKey}: save a key locally (never returned).',
     object({ projectId, action: choice(['compose', 'use', 'elevenlabs', 'styles', 'provider']), revision, style: choice(['pop', 'trap', 'house', 'lofi', 'synthwave', 'cinematic']), mood: choice(['uplifting', 'emotional', 'epic', 'dark', 'chill', 'dreamy']),
       key: { type: 'string', pattern: '^[A-G](#|b)?m?$' }, bpm: number(60, 180), seed: { type: 'integer', minimum: 0, maximum: 2147483647 }, drops: { anyOf: [{ type: 'string', enum: ['auto'] }, { type: 'array', maxItems: 16, items: number(0, T) }] },
@@ -252,6 +255,7 @@ export function validateArguments(value, schema, location = 'arguments') {
   if (schema.pattern && !new RegExp(schema.pattern).test(value)) fail('invalid identifier');
 }
 
+const storyGuide = topic => { if (topic === undefined || topic === 'story') return STORY_GUIDE; throw new StudioError('INVALID_ARGUMENTS', 'topic must be "story".'); };
 export async function callAgentTool(name, args = {}, api) {
   const tool = agentTools.find(t => t.name === name);
   if (!tool) throw new StudioError('UNKNOWN_TOOL', `Unknown tool: ${name}`);
@@ -267,10 +271,11 @@ export async function callAgentTool(name, args = {}, api) {
     quickstart: 'Fastest path: studio_create → studio_auto_edit {platform, render:true} → studio_wait → studio_qc → studio_storyboard {exportId} → studio_publish_pack. Long video → many shorts: studio_recipe {action:"run", name:"shorts-from-long", projectId}. Long edits (podcast, vlog, course, doc): studio_timeline with from/to paging, studio_sections to work per chapter, studio_search to find what was said, studio_fit_duration for the target length, studio_render_range to check a fix, studio_export_timeline to finish in Premiere/Resolve/FCP.',
     workflow: ['create (optional template)', 'analyze (poll get)', 'timeline + storyboard', 'edit with revision (dryRun first if unsure)', 'review → apply useful fix.operations', 'render preview (poll get)', 'storyboard/frame of the preview export', 'render formats (poll get)'] };
   if (name === 'studio_templates') return { templates: TEMPLATES };
+  if (name === 'studio_guide') return storyGuide(args.topic);
   const health = await api('/health');
   const version = String(health.version || '').match(/^(\d+)\.(\d+)\./);
   if (name === 'studio_frame' && args.sourceIndex === undefined && !args.exportId) throw new StudioError('INVALID_ARGUMENTS', 'Give sourceIndex or exportId.');
-  const needs = name === 'studio_music' ? 10 : ['studio_lut', 'studio_color_match', 'studio_stabilize', 'studio_music_fit', 'studio_audio_repair', 'studio_sfx', 'studio_auto_zoom', 'studio_auto_broll', 'studio_batch', 'studio_compare'].includes(name) ? 9
+  const needs = ['studio_apply'].includes(name) ? 11 : name === 'studio_music' ? 10 : ['studio_lut', 'studio_color_match', 'studio_stabilize', 'studio_music_fit', 'studio_audio_repair', 'studio_sfx', 'studio_auto_zoom', 'studio_auto_broll', 'studio_batch', 'studio_compare'].includes(name) ? 9
     : ['studio_render_range', 'studio_fit_duration', 'studio_sections', 'studio_search', 'studio_assemble', 'studio_sync', 'studio_multicam', 'studio_export_timeline', 'studio_comments', 'studio_proxies'].includes(name) ? 8
     : ['studio_find_clips', 'studio_qc', 'studio_wait', 'studio_queue', 'studio_recipe', 'studio_freeze'].includes(name) ? 7
     : ['studio_auto_edit', 'studio_transcribe', 'studio_transcript', 'studio_text_edit', 'studio_reframe', 'studio_publish_pack', 'studio_brand'].includes(name) ? 6
@@ -311,6 +316,11 @@ export async function callAgentTool(name, args = {}, api) {
     if (args.action === 'provider') return api('/studio/music/provider', { method: 'POST', body: { provider: args.provider ?? 'elevenlabs', apiKey: args.apiKey ?? '' } });
     if (args.action === 'styles') return api('/studio/music/styles');
     if (!args.projectId || (args.revision === undefined && !args.dryRun && args.apply !== false)) throw new StudioError('INVALID_ARGUMENTS', 'compose, use and elevenlabs need projectId and revision (or dryRun / apply:false).');
+  }
+  if (name === 'studio_apply') {
+    if (args.action === 'status') { if (!args.buildId) throw new StudioError('INVALID_ARGUMENTS', 'status needs buildId.'); return api(`/studio/story/builds/${args.buildId}`); }
+    if (!args.story) throw new StudioError('INVALID_ARGUMENTS', 'build needs story (see studio_guide {topic:"story"}).');
+    const { action: _a, ...rest } = args; return api('/studio/story/apply', { method: 'POST', body: rest });
   }
   if (name === 'studio_create') return api('/studio/projects', { method: 'POST', body: args });
   const endpoint = `/studio/projects/${args.projectId}`;

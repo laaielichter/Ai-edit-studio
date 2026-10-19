@@ -1,7 +1,7 @@
 # AI Edit Studio — agent quickstart (English)
 
 AI Edit Studio is a **local-first video editor** (Windows beta; Node 20+ and FFmpeg). One engine,
-four doors for agents, all exposing the **same 57 tools with the same JSON schemas**:
+four doors for agents, all exposing the **same 59 tools with the same JSON schemas**:
 
 | Door | How | Best for |
 | --- | --- | --- |
@@ -15,6 +15,19 @@ four doors for agents, all exposing the **same 57 tools with the same JSON schem
 Set up every agent app at once: `node cli.mjs install` (see INSTALL.md). The server listens on `http://127.0.0.1:32146` (env `GAME_TRAILER_STUDIO_PORT`). CLI and MCP start
 the hidden daemon when needed; HTTP callers start it with `node server.mjs` or the start script.
 Send `X-Studio-Client: <your-agent-name>` on HTTP calls: the editor shows your name on every revision.
+
+## New in 0.11 — story documents (59 tools)
+
+- `studio_guide {topic:"story"}` returns the `aes.story/1` format with a complete example. `studio_apply {story, dryRun:true}`
+  validates it and returns the beat schedule, named events (`<scene>.in`, `.out`, `.l1`, `.sub`, `.cta`, …), drops and
+  warnings (reading time, shots under 0.8 s, drops off the bar line, dissolves between text cards) without rendering.
+- `studio_apply {story}` builds it: generated scenes (`title`, `counter`, `terminal`, `chips`, `card/end`: kinetic type,
+  glow, grid, film grain, rendered locally by FFmpeg + libass) and your footage scenes become one ordinary project. Every
+  scene is timed in beats at `music.bpm`; a transition into a scene overlaps the previous one and ends on the beat.
+  Returns `{buildId}`: poll `studio_apply {action:"status", buildId}`; the result holds `projectId`, `revision` and the
+  `renderFormat` for `studio_render`. `music.style` composes a track with the story's BPM and drops; `music.file` uses yours.
+- Unchanged generated scenes are reused from the cache when you build again (sources of a project are fixed, so each
+  build is a new project). Safe areas (`story`, `reels`, `tiktok`, `shorts`) keep text away from app chrome.
 
 ## New in 0.10 — music engine (57 tools)
 

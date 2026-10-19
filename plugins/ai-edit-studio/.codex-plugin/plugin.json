@@ -1,7 +1,7 @@
 {
   "name": "ai-edit-studio",
-  "version": "0.10.1",
-  "description": "Local-first video editor for Codex: 57 editing tools (auto-edit, edit by text, captions, reframe, music, render QC, publish packs) plus workflow skills for shorts, clips from long videos, talking heads and game trailers. Footage never leaves the computer.",
+  "version": "0.11.0",
+  "description": "Local-first video editor for Codex: 59 editing tools (auto-edit, edit by text, captions, reframe, music, render QC, publish packs) plus workflow skills for shorts, clips from long videos, talking heads and game trailers. Footage never leaves the computer.",
   "author": {
     "name": "AI Edit Studio"
   },

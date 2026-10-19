@@ -1,7 +1,7 @@
 # AI Edit Studio — Director 0.10
 
 A **local-first video editor** for creators, game developers and their agents. One engine with a
-pro timeline for people and the same 57 tools for agents (MCP, HTTP/OpenAPI, CLI). Your footage never
+pro timeline for people and the same 59 tools for agents (MCP, HTTP/OpenAPI, CLI). Your footage never
 leaves your machine; originals are only read.
 
 *Formerly Game Trailer Studio. Existing projects, storage paths, `GAME_TRAILER_STUDIO_*` settings and the

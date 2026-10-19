@@ -28,6 +28,7 @@ import { fitDuration, searchProject, assembleFromScript, multicamPlan, exportTim
 import { syncSources } from './sync.mjs';
 import { sectionSpans } from '../public/edit-ops.js';
 import { qcFile } from './qc.mjs';
+import { compileStory, storySummary, renderGeneratedScene } from './story.mjs';
 import { composeToFile, styleList, MOODS, MUSIC_ENGINE_VERSION, providerStatus, saveProviderKey, providerPrompt, elevenLabsCompose } from './music/index.mjs';
 
 /** Project change events for live clients (SSE) and long-polling agents (studio_wait). */
@@ -1931,4 +1932,86 @@ export async function compareProject(id, request = {}) {
       compare: { a: a.id, b: b.id, otherProjectId: other?.id ?? null, layout, audio }, createdAt: new Date().toISOString() });
     p.message = 'Comparison ready.';
   }), note: 'A new export with both versions in sync (the shorter one holds its last frame).' };
+}
+
+// ---------------------------------------------------------------------------
+// Story: one JSON document becomes generated scenes + footage on a beat grid, as an ordinary project.
+const storyBuilds = new Map();
+const publicBuild = b => ({ buildId: b.id, status: b.status, progress: b.progress, message: b.message, startedAt: b.startedAt, ...(b.result ? { result: b.result } : {}), ...(b.error ? { error: b.error } : {}) });
+const clipId = (scene, i, used) => {
+  let id = String(scene.id).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || `s${i + 1}`;
+  while (used.has(id)) id = `${id.slice(0, 18)}${used.size}`;
+  used.add(id); return id;
+};
+const FOOTAGE_CLIP_FIELDS = ['framing', 'zoom', 'zoomEnd', 'focusX', 'focusY', 'focusXEnd', 'focusYEnd', 'brightness', 'contrast', 'saturation', 'temperature', 'sharpen', 'gain', 'speed', 'stabilize'];
+
+export async function storyApply(request = {}) {
+  if (request.action === 'status') {
+    const build = storyBuilds.get(String(request.buildId ?? ''));
+    if (!build) throw new StudioError('BUILD_NOT_FOUND', 'Unknown buildId (builds are kept while the studio runs).');
+    return publicBuild(build);
+  }
+  const c = compileStory(request.story);
+  if (request.dryRun) return { dryRun: true, ...storySummary(c), note: 'Nothing was rendered. Fix warnings, then run again without dryRun; poll the returned buildId with studio_apply {action:"status", buildId}.' };
+  if ([...storyBuilds.values()].some(b => b.status === 'building')) throw new StudioError('ENGINE_BUSY', 'A story is already being built. Poll it with studio_apply {action:"status", buildId}.');
+  const build = { id: randomUUID(), status: 'building', progress: 0, message: 'Starting', startedAt: new Date().toISOString() };
+  storyBuilds.set(build.id, build);
+  while (storyBuilds.size > 20) storyBuilds.delete(storyBuilds.keys().next().value);
+  runStoryBuild(build, c, request).then(result => { build.result = result; build.status = 'done'; build.progress = 1; build.message = 'Ready'; })
+    .catch(e => { build.status = 'failed'; build.error = { code: e.code ?? 'STORY_FAILED', message: e.message }; build.message = e.message; });
+  return publicBuild(build);
+}
+
+async function runStoryBuild(build, c, request) {
+  await ensureDataRoot(2 * 1024 ** 3);
+  const tools = findFfmpegTools(), dir = path.join(ROOT, 'story-cache');
+  const files = [];
+  let reused = 0;
+  for (const [i, scene] of c.scenes.entries()) {
+    build.message = `Scene ${i + 1}/${c.scenes.length}: ${scene.id}`; build.progress = i / (c.scenes.length + 2);
+    if (scene.kind === 'footage') { files.push((await checkedFile(scene.source, MEDIA_EXTENSIONS, 20 * 1024 ** 3)).file); continue; }
+    if (scene.logo) scene.logo = (await checkedFile(scene.logo, ['.png', '.jpg', '.jpeg'], 16 * 1024 ** 2)).file;
+    const r = await renderGeneratedScene(c, scene, dir, { ffmpeg: tools.ffmpeg });
+    if (r.reused) reused++;
+    files.push(r.file);
+  }
+  build.message = 'Creating the project'; build.progress = c.scenes.length / (c.scenes.length + 2);
+  const inputs = [], indexOf = new Map();
+  for (const f of files) { const k = f.toLowerCase(); if (!indexOf.has(k)) { indexOf.set(k, inputs.length); inputs.push(f); } }
+  const project = await createProject({ inputs, name: c.name, author: request.author });
+  const used = new Set();
+  const clips = c.scenes.map((scene, i) => {
+    const sourceIndex = indexOf.get(files[i].toLowerCase());
+    const duration = project.sources[sourceIndex].duration;
+    const clip = { id: clipId(scene, i, used), label: scene.label || scene.id, sourceIndex, transition: scene.transition };
+    if (scene.transitionSeconds) clip.transitionSeconds = scene.transitionSeconds;
+    if (scene.kind === 'footage') {
+      // The clip starts one transition early so the cut lands on the beat.
+      const speed = scene.speed ?? 1, start = Math.max(0, scene.start - scene.transitionSeconds * speed);
+      Object.assign(clip, { start, end: start + scene.clipSeconds * speed });
+      for (const k of FOOTAGE_CLIP_FIELDS) if (scene[k] !== undefined) clip[k] = scene[k];
+      if (clip.end > duration + 0.001) throw new StudioError('INVALID_STORY', `Scene ${scene.id}: ${path.basename(scene.source)} is ${Math.round(duration * 100) / 100} s long; the scene needs source time up to ${Math.round(clip.end * 100) / 100} s.`);
+    } else Object.assign(clip, { start: 0, end: scene.clipSeconds });
+    return clip;
+  });
+  const flag = { 'vertical-share': 'exportVertical', 'landscape-share': 'exportShare', square: 'exportSquare', portrait: 'exportPortrait' }[c.deliver];
+  const options = { ...project.options, label: '', endTitle: '', title: '', socialSize: c.size, // the studio's game-trailer badges stay off: a story carries its own words
+    ...(flag ? { [flag]: true } : {}),
+    texts: c.texts.map(t => ({ start: t.start, end: t.end, text: t.text, style: t.style, position: t.position })),
+    sfx: c.sfx.map(e => ({ time: e.time, kind: e.kind, gain: e.gain })),
+    markers: c.drops.map(d => ({ time: d.time, label: 'drop', color: 'red' })) };
+  if (c.music.file) options.music = c.music.file;
+  let saved = await saveProject(project.id, { revision: project.revision, options, clips, author: request.author, summary: `Story "${c.name}": ${c.scenes.length} scenes, ${c.duration} s at ${c.bpm} BPM` });
+  const warnings = [...c.warnings];
+  if (Math.abs((saved.plan?.actualDuration ?? 0) - c.duration) > 0.1) warnings.push({ code: 'DURATION_DRIFT', message: `The edit is ${Math.round(saved.plan.actualDuration * 100) / 100} s, the story ${c.duration} s: check transitions.` });
+  let music = null;
+  if (c.music.style && !c.music.file) {
+    build.message = 'Composing music'; build.progress = (c.scenes.length + 1) / (c.scenes.length + 2);
+    const made = await musicProject(project.id, { action: 'compose', revision: saved.revision, author: request.author, style: c.music.style, mood: c.music.mood, seed: c.music.seed, bpm: c.bpm,
+      drops: c.drops.map(d => d.time), ending: c.music.ending ?? 'hit', musicGain: c.music.gain });
+    music = { style: made.style, key: made.key, bpm: made.bpm, seed: made.seed, file: made.file };
+    saved = await getProject(project.id);
+  }
+  return { projectId: project.id, revision: saved.revision, ...storySummary(c), warnings, scenesReused: reused, music, renderFormat: c.renderFormat, projectName: c.name,
+    next: `studio_qc / studio_review, then studio_render {projectId, revision, formats:["${c.renderFormat}"]}. Unchanged scenes are reused when you build the story again.` };
 }
