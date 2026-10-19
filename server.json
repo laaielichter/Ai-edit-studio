@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.laaielichter/ai-edit-studio",
+  "title": "AI Edit Studio",
+  "description": "Local-first video editor for AI agents: 57 tools for auto-edit, shorts, captions, music and QC.",
+  "repository": {
+    "url": "https://github.com/laaielichter/ai-edit-studio",
+    "source": "github"
+  },
+  "version": "0.10.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "ai-edit-studio",
+      "version": "0.10.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "valueHint": "mcp"
+        }
+      ]
+    }
+  ]
+}

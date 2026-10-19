@@ -4,7 +4,7 @@ import { EXPORT_PRESETS, MASTER_FORMATS, SOCIAL_SIZES, MAX_EXPORT_FORMATS } from
 import { TEMPLATES } from './templates.mjs';
 import { LIMITS } from '../public/edit-ops.js';
 const T = LIMITS.editSeconds, S = LIMITS.sourceSeconds, SRC = { type: 'integer', minimum: 0, maximum: LIMITS.sources - 1 };
-export const STUDIO_VERSION = '0.10.0-beta.1';
+export const STUDIO_VERSION = '0.10.1';
 
 const number = (minimum, maximum) => ({ type: 'number', minimum, maximum });
 const string = (maxLength = 1000) => ({ type: 'string', maxLength });

@@ -1,6 +1,6 @@
 {
   "name": "ai-edit-studio",
-  "version": "0.10.0-beta.1",
+  "version": "0.10.1",
   "description": "Local-first video editor for agents, editors and creators: 57 editing tools (auto-edit, edit by text, captions, reframe, music, QC, publish packs) plus ready workflows for shorts, clips from long videos, talking heads and game trailers. Footage never leaves the computer.",
   "author": { "name": "AI Edit Studio" },
   "keywords": ["video", "editing", "shorts", "tiktok", "reels", "captions", "podcast", "trailer", "ffmpeg", "mcp"],

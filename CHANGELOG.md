@@ -9,6 +9,9 @@
 - **npm**: `npm install -g ai-edit-studio` gives the commands `ai-edit-studio`, `ai-edit-studio-mcp` and
   `ai-edit-studio-server`. An npm install keeps its data in `~/.ai-edit-studio` (macOS/Linux) or
   `Documents\AI Edit Studio` (Windows), so updates never touch your projects.
+- **MCP Registry**: `server.json` and `mcpName` for the official registry (`io.github.laaielichter/ai-edit-studio`),
+  `ai-edit-studio mcp` starts the MCP server over stdio (what `npx -y ai-edit-studio mcp` runs), and the workflow
+  `publish-mcp.yml` lists a published npm version in the registry. Version 0.10.1 (first version with `mcpName`).
 - **Open source** under the MIT license. The Windows default data folder is now `Documents\AI Edit Studio`.
 
 ## Unreleased — Claude Code + OpenAI Codex plugins, OpenAI API, installer and release zip, workflow skills

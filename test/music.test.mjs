@@ -92,7 +92,7 @@ test('studio_music tool: schema, routing and version gate', async () => {
   validateArguments({ projectId: id, revision: 3, style: 'trap', mood: 'dark', key: 'F#m', drops: [2.5, 9], seed: 7 }, spec.inputSchema);
   validateArguments({ projectId: id, revision: 3, drops: 'auto' }, spec.inputSchema);
   assert.throws(() => validateArguments({ projectId: id, style: 'polka' }, spec.inputSchema), /unsupported/);
-  const calls = [], api = async (route, req) => { calls.push({ route, req }); return route === '/health' ? { service: 'AI Edit Studio', version: '0.10.0-beta.1' } : { ok: true }; };
+  const calls = [], api = async (route, req) => { calls.push({ route, req }); return route === '/health' ? { service: 'AI Edit Studio', version: '0.10.1' } : { ok: true }; };
   await callAgentTool('studio_music', { action: 'styles' }, api); assert.equal(calls.at(-1).route, '/studio/music/styles');
   await callAgentTool('studio_music', { projectId: id, revision: 3, style: 'pop' }, api); assert.equal(calls.at(-1).route, `/studio/projects/${id}/music`);
   await assert.rejects(callAgentTool('studio_music', { style: 'pop' }, api), /projectId and revision/);

@@ -115,6 +115,9 @@ ai-edit-studio install      # data folder + connects Claude Code, Codex, Claude 
 ai-edit-studio serve        # starts the editor on http://127.0.0.1:32146
 ```
 
+As an MCP server for an agent, without installing anything first: `claude mcp add ai-edit-studio -- npx -y ai-edit-studio mcp`
+(the same command works in Cursor, Claude Desktop and Codex configs). Registry name: `io.github.laaielichter/ai-edit-studio`.
+
 **From the download zip:** unzip, double-click `Install-AI-Edit-Studio.cmd` (macOS/Linux: `./install.sh`)
 and follow [INSTALL.md](INSTALL.md). It sets up the data folder and connects Claude Code, OpenAI Codex, Claude Desktop
 and Cursor in one go.

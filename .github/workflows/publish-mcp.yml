@@ -1,0 +1,39 @@
+name: Publish to MCP Registry
+
+# Lists the server in the official MCP Registry (registry.modelcontextprotocol.io).
+# The npm package must be published first (npm publish): the registry reads `mcpName` from it.
+# Run it from the Actions tab (Run workflow), or push a tag like v0.10.1.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # lets GitHub prove this repo is laaielichter/ai-edit-studio (no secrets needed)
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check that server.json and the npm package agree
+        run: |
+          NAME=$(jq -r '.name' server.json)
+          MCPNAME=$(jq -r '.mcpName' package.json)
+          VERSION=$(jq -r '.packages[0].version' server.json)
+          PKG=$(jq -r '.packages[0].identifier' server.json)
+          [ "$NAME" = "$MCPNAME" ] || { echo "::error::server.json name ($NAME) is not the same as mcpName in package.json ($MCPNAME)"; exit 1; }
+          [ "$(jq -r '.version' package.json)" = "$VERSION" ] || { echo "::error::package.json version is not $VERSION"; exit 1; }
+          npm view "$PKG@$VERSION" version >/dev/null 2>&1 || { echo "::error::$PKG@$VERSION is not on npm yet. Run npm publish first, then run this workflow again."; exit 1; }
+          npm view "$PKG@$VERSION" mcpName | grep -qx "$NAME" || { echo "::error::The published npm package has no mcpName $NAME. Publish this version to npm first."; exit 1; }
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server to MCP Registry
+        run: ./mcp-publisher publish

@@ -7,7 +7,7 @@ four doors for agents, all exposing the **same 57 tools with the same JSON schem
 | --- | --- | --- |
 | **Claude Code plugin** | `/plugin marketplace add <repo folder>`, `/plugin install ai-edit-studio@ai-edit-studio` | MCP server + workflow skills (`viral-short`, `long-to-shorts`, `talking-head`, `game-trailer`, `quality-gate`, `troubleshoot`) + `video-director` agent |
 | **OpenAI Codex** | `node cli.mjs codex-setup` (MCP + skills) or the Codex plugin (`plugins/ai-edit-studio`, `codex-setup --plugin`) | Codex app, CLI, IDE |
-| **MCP (stdio)** | `node mcp.mjs` as a subprocess; `claude mcp add ai-edit-studio -- node mcp.mjs` | Claude Code, Claude Desktop, Cursor, Codex, any MCP client |
+| **MCP (stdio)** | `npx -y ai-edit-studio mcp`, or `node mcp.mjs` as a subprocess; `claude mcp add ai-edit-studio -- npx -y ai-edit-studio mcp` | Claude Code, Claude Desktop, Cursor, Codex, any MCP client |
 | **HTTP** | `GET /api/agent/tools` (`?format=openai` for OpenAI function tools), `POST /api/agent/call {name, arguments}` or `POST /api/agent/tools/{name}` | OpenAI function calling, LangChain, n8n, custom agents |
 | **OpenAPI** | `GET /api/openapi.json` (3.1, generated from the same schemas) | GPT Actions, OpenAPI tool loaders |
 | **CLI** | `node cli.mjs studio <tool> --request file.json [--wait]` | shell agents, scripts |
