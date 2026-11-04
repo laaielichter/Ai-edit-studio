@@ -50,14 +50,30 @@ function json(response, status, value) {
   response.end(body);
 }
 
+const NOT_FOUND_CODES = new Set([
+  'JOB_NOT_FOUND', 'PROCESS_NOT_FOUND', 'ROUTE_NOT_FOUND',
+  'PROJECT_NOT_FOUND', 'REVISION_NOT_FOUND', 'STYLE_NOT_FOUND',
+  'EXPORT_NOT_FOUND', 'SECTION_NOT_FOUND', 'COMMENT_NOT_FOUND',
+  'BUILD_NOT_FOUND', 'BRAND_NOT_FOUND', 'RECIPE_NOT_FOUND',
+  'RUN_NOT_FOUND', 'UNKNOWN_TOOL',
+]);
+const CONFLICT_CODES = new Set([
+  'CAPTURE_ACTIVE', 'OUTPUT_EXISTS', 'REVISION_CONFLICT', 'ENGINE_BUSY', 'PROJECT_BUSY',
+]);
+
+/** Map a known StudioError code to an HTTP status. */
+export function httpStatus(code) {
+  if (NOT_FOUND_CODES.has(code)) return 404;
+  if (code === 'METHOD_NOT_ALLOWED') return 405;
+  if (code === 'BODY_TOO_LARGE') return 413;
+  if (CONFLICT_CODES.has(code)) return 409;
+  return 400;
+}
+
 function apiError(response, error) {
   const known = error instanceof StudioError;
   const code = known ? error.code : 'INTERNAL_ERROR';
-  const status = code === 'JOB_NOT_FOUND' || code === 'PROCESS_NOT_FOUND' || code === 'ROUTE_NOT_FOUND' ? 404
-    : code === 'METHOD_NOT_ALLOWED' ? 405
-      : code === 'BODY_TOO_LARGE' ? 413
-      : code === 'CAPTURE_ACTIVE' || code === 'OUTPUT_EXISTS' || code === 'REVISION_CONFLICT' || code === 'ENGINE_BUSY' || code === 'PROJECT_BUSY' ? 409
-        : known ? 400 : 500;
+  const status = known ? httpStatus(code) : 500;
   json(response, status, {
     ok: false,
     error: {
