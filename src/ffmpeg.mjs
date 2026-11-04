@@ -65,6 +65,31 @@ function firstLine(value) {
   return String(value ?? '').split(/\r?\n/, 1)[0];
 }
 
+
+/** Last non-empty stderr line from ffprobe/ffmpeg, trimmed for agent messages. */
+function probeFailReason(stderr, maxLen = 160) {
+  const lines = String(stderr ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const last = lines.at(-1) || 'unreadable media';
+  return last.length > maxLen ? `${last.slice(0, maxLen - 1)}…` : last;
+}
+
+/** Turn a failed ffprobe run into UNSUPPORTED_MEDIA; leave timeout/dependency codes alone. */
+function rethrowProbeFailure(error, file) {
+  if (error instanceof StudioError) {
+    if (error.code === 'PROCESS_TIMEOUT' || error.code === 'DEPENDENCY_MISSING' || error.code === 'PROCESS_SPAWN_FAILED') {
+      throw error;
+    }
+    if (error.code === 'PROCESS_FAILED') {
+      const reason = probeFailReason(error.details?.stderr);
+      throw new StudioError('UNSUPPORTED_MEDIA', `Cannot read ${file}: ${reason}`, {
+        cause: error,
+        details: { file, stderr: error.details?.stderr },
+      });
+    }
+  }
+  throw error;
+}
+
 export async function inspectFfmpeg({ smokeTest = true, tools = findFfmpegTools() } = {}) {
   const inspectOptions = { timeoutMs: 30_000, maxOutputBytes: 8 * 1024 * 1024 };
   const [version, probeVersion, encoders, devices, filters] = await Promise.all([
@@ -125,14 +150,19 @@ function parseRate(value) {
 }
 
 export async function probeMedia(file, tools = findFfmpegTools()) {
-  const result = await runProcess(tools.ffprobe, [
-    '-protocol_whitelist', 'file,pipe',
-    '-v', 'error',
-    '-of', 'json',
-    '-show_format',
-    '-show_streams',
-    file,
-  ], { timeoutMs: 60_000, maxOutputBytes: 4 * 1024 * 1024 });
+  let result;
+  try {
+    result = await runProcess(tools.ffprobe, [
+      '-protocol_whitelist', 'file,pipe',
+      '-v', 'error',
+      '-of', 'json',
+      '-show_format',
+      '-show_streams',
+      file,
+    ], { timeoutMs: 60_000, maxOutputBytes: 4 * 1024 * 1024 });
+  } catch (error) {
+    rethrowProbeFailure(error, file);
+  }
 
   let data;
   try {
@@ -178,18 +208,40 @@ export async function probeMedia(file, tools = findFfmpegTools()) {
 
 /** A still image as a 60-second virtual source: width/height from ffprobe, no audio. */
 export async function probeStill(file, tools = findFfmpegTools(), seconds = 60) {
-  const result = await runProcess(tools.ffprobe, ['-protocol_whitelist', 'file,pipe', '-v', 'error', '-of', 'json', '-show_streams', file], { timeoutMs: 30_000, maxOutputBytes: 1024 * 1024 });
-  const data = JSON.parse(result.stdout), video = data.streams?.find(s => s.codec_type === 'video');
+  let result;
+  try {
+    result = await runProcess(tools.ffprobe, ['-protocol_whitelist', 'file,pipe', '-v', 'error', '-of', 'json', '-show_streams', file], { timeoutMs: 30_000, maxOutputBytes: 1024 * 1024 });
+  } catch (error) {
+    rethrowProbeFailure(error, file);
+  }
+  let data;
+  try {
+    data = JSON.parse(result.stdout);
+  } catch (error) {
+    throw new StudioError('PROBE_PARSE_FAILED', `ffprobe returned invalid JSON for ${file}.`, { cause: error });
+  }
+  const video = data.streams?.find(s => s.codec_type === 'video');
   if (!video || !(Number(video.width) > 0) || !(Number(video.height) > 0)) throw new StudioError('UNSUPPORTED_MEDIA', `No usable image in ${file}.`);
   return { file: path.resolve(file), duration: seconds, still: true, size: 0, bitrate: 0, format: 'image',
     video: { index: video.index, codec: video.codec_name ?? '', width: Number(video.width), height: Number(video.height), fps: 0, pixelFormat: video.pix_fmt ?? '', colorTransfer: '', colorPrimaries: '' }, audio: null };
 }
 
 export async function probeAudio(file, tools = findFfmpegTools()) {
-  const result = await runProcess(tools.ffprobe, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-show_format', '-show_streams', '-of', 'json', file], { timeoutMs: 30000, maxOutputBytes: 1024 * 1024 });
-  const data = JSON.parse(result.stdout), stream = data.streams?.find(s => s.codec_type === 'audio');
+  let result;
+  try {
+    result = await runProcess(tools.ffprobe, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-show_format', '-show_streams', '-of', 'json', file], { timeoutMs: 30000, maxOutputBytes: 1024 * 1024 });
+  } catch (error) {
+    rethrowProbeFailure(error, file);
+  }
+  let data;
+  try {
+    data = JSON.parse(result.stdout);
+  } catch (error) {
+    throw new StudioError('PROBE_PARSE_FAILED', `ffprobe returned invalid JSON for ${file}.`, { cause: error });
+  }
+  const stream = data.streams?.find(s => s.codec_type === 'audio');
   const duration = Number(data.format?.duration ?? stream?.duration);
-  if (!stream || !Number.isFinite(duration) || duration <= 0) throw new StudioError('INVALID_AUDIO', 'No usable audio found.');
+  if (!stream || !Number.isFinite(duration) || duration <= 0) throw new StudioError('INVALID_AUDIO', `No usable audio found in ${file}.`);
   return { duration, channels: stream.channels };
 }
 
