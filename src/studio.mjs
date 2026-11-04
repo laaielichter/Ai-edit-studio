@@ -117,16 +117,18 @@ export async function checkedFile(file, extensions, limit = Infinity) {
   const real = await fs.realpath(file).catch(() => { throw new StudioError('FILE_NOT_FOUND', `File not found: ${file}`); });
   const info = await fs.lstat(real);
   const ext = path.extname(real).toLowerCase();
+  // Name the path the caller gave (file), not realpath(), so messages match what the agent sent
+  // and stay stable on Windows where short 8.3 tmp paths differ from the long form.
   if (!info.isFile() || info.isSymbolicLink()) {
-    throw new StudioError('INVALID_MEDIA', `Not a regular file: ${real}`);
+    throw new StudioError('INVALID_MEDIA', `Not a regular file: ${file}`);
   }
   if (!extensions.includes(ext)) {
-    throw new StudioError('INVALID_MEDIA', `Unsupported extension for ${real}: ${ext || '(none)'}. Allowed: ${extensions.join(', ')}`);
+    throw new StudioError('INVALID_MEDIA', `Unsupported extension for ${file}: ${ext || '(none)'}. Allowed: ${extensions.join(', ')}`);
   }
   if (info.size > limit) {
     const sizeMiB = (info.size / 1024 ** 2).toFixed(1);
     const limitMiB = (limit / 1024 ** 2).toFixed(0);
-    throw new StudioError('INVALID_MEDIA', `File too large: ${real} is ${sizeMiB} MiB, limit is ${limitMiB} MiB`);
+    throw new StudioError('INVALID_MEDIA', `File too large: ${file} is ${sizeMiB} MiB, limit is ${limitMiB} MiB`);
   }
   return { file: real, size: info.size, mtimeMs: info.mtimeMs };
 }
