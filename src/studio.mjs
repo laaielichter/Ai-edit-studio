@@ -109,15 +109,24 @@ export async function listProjects() {
   }
   return records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
-async function checkedFile(file, extensions, limit = Infinity) {
+export async function checkedFile(file, extensions, limit = Infinity) {
   if (typeof file !== 'string' || !path.isAbsolute(file) || file.includes('\0')) {
-    throw new StudioError('LOCAL_FILE_REQUIRED', 'Choose an absolute local file path.');
+    throw new StudioError('LOCAL_FILE_REQUIRED', `Choose an absolute local file path (got ${typeof file === 'string' ? JSON.stringify(file) : String(file)}).`);
   }
-  if (/^(?:\\\\|\/\/)/.test(file)) throw new StudioError('LOCAL_FILE_REQUIRED', 'Network paths are not allowed in this local beta.');
-  const real = await fs.realpath(file).catch(() => { throw new StudioError('FILE_NOT_FOUND', 'File not found.'); });
+  if (/^(?:\\\\|\/\/)/.test(file)) throw new StudioError('LOCAL_FILE_REQUIRED', `Network paths are not allowed in this local beta: ${file}`);
+  const real = await fs.realpath(file).catch(() => { throw new StudioError('FILE_NOT_FOUND', `File not found: ${file}`); });
   const info = await fs.lstat(real);
-  if (!info.isFile() || info.isSymbolicLink() || !extensions.includes(path.extname(real).toLowerCase()) || info.size > limit) {
-    throw new StudioError('INVALID_MEDIA', 'This file type or file size is not supported.');
+  const ext = path.extname(real).toLowerCase();
+  if (!info.isFile() || info.isSymbolicLink()) {
+    throw new StudioError('INVALID_MEDIA', `Not a regular file: ${real}`);
+  }
+  if (!extensions.includes(ext)) {
+    throw new StudioError('INVALID_MEDIA', `Unsupported extension for ${real}: ${ext || '(none)'}. Allowed: ${extensions.join(', ')}`);
+  }
+  if (info.size > limit) {
+    const sizeMiB = (info.size / 1024 ** 2).toFixed(1);
+    const limitMiB = (limit / 1024 ** 2).toFixed(0);
+    throw new StudioError('INVALID_MEDIA', `File too large: ${real} is ${sizeMiB} MiB, limit is ${limitMiB} MiB`);
   }
   return { file: real, size: info.size, mtimeMs: info.mtimeMs };
 }
