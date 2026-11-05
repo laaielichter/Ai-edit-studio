@@ -6,7 +6,9 @@ import { DATA_ROOT, StudioError, writeJsonAtomic, readJson, MEDIA_EXTENSIONS } f
 
 const ROOT = () => path.join(DATA_ROOT, 'studio', 'brands');
 export const LOGO_POSITIONS = Object.freeze(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
-const slug = name => String(name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+const legacySlug = name => String(name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+// Accents are folded so "Café Noir" keeps a readable id; legacySlug stays only to find kits saved before that.
+const slug = name => legacySlug(String(name ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, ''));
 const hex = (v, fallback, name) => {
   if (v === undefined || v === '') return fallback;
   if (!/^#?[0-9a-fA-F]{6}$/.test(String(v))) throw new StudioError('INVALID_BRAND', `${name}: use a hex colour like #FFB400.`);
@@ -28,7 +30,7 @@ async function localFile(value, extensions, name, limit) {
 
 export async function normalizeBrand(input = {}) {
   const id = slug(input.name);
-  if (!id) throw new StudioError('INVALID_BRAND', 'Give the brand kit a name.');
+  if (!id) throw new StudioError('INVALID_BRAND', input.name ? 'The brand kit name needs at least one Latin letter or digit.' : 'Give the brand kit a name.');
   return {
     schemaVersion: 1, id, name: String(input.name).trim().slice(0, 60),
     logo: await localFile(input.logo, ['.png', '.jpg', '.jpeg'], 'logo', 16 * 1024 ** 2),
@@ -64,8 +66,13 @@ export async function saveBrand(input) {
   return brand;
 }
 export async function readBrandSnapshot(id) {
-  if (!slug(id)) return null;
-  try { return await readJson(path.join(ROOT(), `${slug(id)}.json`)); } catch { return null; }
+  const current = slug(id);
+  if (!current) return null;
+  const previous = legacySlug(id);
+  for (const key of previous && previous !== current ? [current, previous] : [current]) {
+    try { return await readJson(path.join(ROOT(), `${key}.json`)); } catch { /* try the next id */ }
+  }
+  return null;
 }
 export async function getBrand(id) {
   const brand = await readBrandSnapshot(id);
