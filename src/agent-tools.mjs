@@ -397,6 +397,7 @@ export async function runStudioCommand(command, flags, api) {
     const content = flags.request === '-' ? await readStdin() : await fs.readFile(String(flags.request), 'utf8');
     if (content.length > 12 * 1024 * 1024) throw new StudioError('REQUEST_TOO_LARGE', 'Request exceeds 12 MiB.');
     try { args = JSON.parse(content.replace(/^\uFEFF/, '')); } catch { throw new StudioError('INVALID_JSON', 'Request must be a JSON object.'); }
+    if (args === null || typeof args !== 'object' || Array.isArray(args)) throw new StudioError('INVALID_JSON', 'Request must be a JSON object.');
   }
   if (flags.project) args.projectId = String(flags.project);
   if (flags.revision) args.revision = Number(flags.revision);
