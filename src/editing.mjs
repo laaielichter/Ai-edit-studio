@@ -94,6 +94,7 @@ export function normalizeOptions(value = {}) {
     sections: (() => { try { return normalizeSections(value.sections); } catch (e) { throw new StudioError('INVALID_SECTION', e.message); } })(),
     voiceEnhance: oneOf(value.voiceEnhance, 'off', ['off', 'light', 'strong'], 'Voice enhance'),
     segmentedRender: oneOf(value.segmentedRender, 'auto', ['auto', 'on', 'off'], 'Segmented render'),
+        chapters: oneOf(value.chapters, 'auto', ['auto', 'off'], 'Chapters'),
     loudnessTarget: value.loudnessTarget === null || value.loudnessTarget === 'off' ? null : bounded(value.loudnessTarget, -14, -24, -9, 'Loudness target (LUFS)'),
     template: text(value.template, 40),
     musicTrimStart: bounded(value.musicTrimStart, 0, 0, 600, 'Music starts at'),

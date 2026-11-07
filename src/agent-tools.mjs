@@ -28,7 +28,7 @@ const options = object({
   captionStyle: choice(['box', 'bold', 'minimal']), captionPosition: choice(['low', 'middle', 'high']), musicTrimStart: number(0, 600),
   captionAnimation: choice(['none', 'karaoke', 'pop', 'highlight', 'words']), captionCase: choice(['normal', 'upper']),
   markers: { type: 'array', maxItems: 100, items: object({ time: number(0, T), label: string(60), color: choice(['yellow', 'red', 'green', 'blue']) }, ['time']) },
-  template: string(40), brand: string(40), allowJumpCuts: bool, autoCaptions: bool, segmentedRender: choice(['auto', 'on', 'off']),
+  template: string(40), brand: string(40), allowJumpCuts: bool, autoCaptions: bool, segmentedRender: choice(['auto', 'on', 'off']), chapters: choice(['auto', 'off']),
   sections: { type: 'array', maxItems: 60, items: object({ name: string(60), clip: { type: 'string', pattern: '^[a-z0-9]{1,24}$' }, color: choice(['yellow', 'red', 'green', 'blue', 'purple']) }, ['name', 'clip']) },
   lut: string(), lutStrength: number(0, 1), progressBar: choice(['off', 'bottom', 'top']),
   sfx: { type: 'array', maxItems: 300, items: object({ time: number(0, T), kind: choice(['whoosh', 'hit', 'pop', 'riser', 'click', 'drop']), gain: number(0, 2) }, ['time', 'kind']) },
@@ -199,7 +199,7 @@ export const agentTools = [
       key: { type: 'string', pattern: '^[A-G](#|b)?m?$' }, bpm: number(60, 180), seed: { type: 'integer', minimum: 0, maximum: 2147483647 }, drops: { anyOf: [{ type: 'string', enum: ['auto'] }, { type: 'array', maxItems: 16, items: number(0, T) }] },
       ending: choice(['hit', 'fade']), tail: number(1, 6), duration: number(4, 600), intensity: number(0, 1), stems: bool, musicGain: number(0, 1), apply: bool, dryRun: bool,
       file: string(), prompt: string(4000), extra: string(500), instrumental: bool, model: string(40), provider: choice(['elevenlabs']), apiKey: string(200), author: string(40) }, [])),
-  spec('render', 'Start export from the saved revision. Use preview first (previewFormat "vertical" for a 9:16 check). Formats are separate renders (720p hd, 1080p landscape, qhd, uhd, ultrawide 21:9; vertical/square/portrait at 720, 1080, 1440 and vertical 4K; "stems" = WAV stems: dialogue, voice, music, effects, mix); never uploads/publishes. Poll get for completion and inspect exports.', object({ projectId, revision, preview: bool, queue: bool, previewFormat: choice(['landscape', 'vertical', 'square', 'portrait']), formats: { type: 'array', items: choice([...Object.keys(EXPORT_PRESETS), 'stems']), minItems: 1, maxItems: MAX_EXPORT_FORMATS + 1 } }, ['projectId', 'revision'])),
+  spec('render', 'Start export from the saved revision. Use preview first (previewFormat "vertical" for a 9:16 check). Formats are separate renders (720p hd, 1080p landscape, qhd, uhd, ultrawide 21:9; vertical/square/portrait at 720, 1080, 1440 and vertical 4K; "stems" = WAV stems: dialogue, voice, music, effects, mix); never uploads/publishes. Poll get for completion and inspect exports. Full renders of an edit with sections (or labelled markers) embed MP4 chapters; options.chapters:"off" turns that off. Previews and range renders have none.', object({ projectId, revision, preview: bool, queue: bool, previewFormat: choice(['landscape', 'vertical', 'square', 'portrait']), formats: { type: 'array', items: choice([...Object.keys(EXPORT_PRESETS), 'stems']), minItems: 1, maxItems: MAX_EXPORT_FORMATS + 1 } }, ['projectId', 'revision'])),
 ];
 
 /** OpenAPI 3.1 description of the HTTP tool surface, generated from the same schemas MCP serves. */

@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { findFfmpegTools } from '../src/ffmpeg.mjs';
+import { runProcess } from '../src/process.mjs';
 import { applyOperations, normalizeSections, sectionSpans, totalDuration, layout } from '../public/edit-ops.js';
 import { buildFilter, segmentBoundaries } from '../src/render.mjs';
 import { validateClips } from '../src/editing.mjs';
-import { fitDuration, searchWords, searchProject, assembleFromScript, scriptLines, multicamPlan, exportTimeline, timecode } from '../src/longform.mjs';
+import { fitDuration, searchWords, searchProject, assembleFromScript, scriptLines, multicamPlan, exportTimeline, timecode, chapterMarks, chapterMetadata } from '../src/longform.mjs';
 import { correlate, onsets } from '../src/sync.mjs';
 import { agentTools, validateArguments, callAgentTool, OPERATIONS } from '../src/agent-tools.mjs';
 
@@ -241,4 +246,49 @@ test('0.8 tools: 46 tools, schemas validate, version gate, routes', async () => 
   assert.deepEqual(calls.filter(c => c[0] !== '/health').map(c => c[0]), [`/studio/projects/${id}/search`, `/studio/projects/${id}/export-timeline`, `/studio/projects/${id}/render-range`]);
   const old = async route => (route === '/health' ? { service: 'AI Edit Studio', version: '0.7.0-beta.1' } : {});
   await assert.rejects(callAgentTool('studio_sections', { projectId: id }, old), /RESTART_REQUIRED|predates/);
+});
+
+test('chapterMarks: sections, markers only and brand intro offset', () => {
+  const clips = [{ id: 'a', sourceIndex: 0, start: 1, end: 5 }, { id: 'b', sourceIndex: 1, start: 10, end: 13, speed: 1.5 }, { id: 'c', sourceIndex: 0, start: 20, end: 24, transition: 'fade', transitionSeconds: 0.5 }];
+  assert.deepEqual(chapterMarks(clips, { sections: [{ name: 'Part B', clip: 'b' }], markers: [{ time: 1, label: 'm' }] }),
+    [{ start: 0, end: 4, title: 'Intro' }, { start: 4, end: 9.5, title: 'Part B' }]);
+  assert.deepEqual(chapterMarks(clips, { markers: [{ time: 3, label: 'Mid' }, { time: 1, label: '' }] }),
+    [{ start: 0, end: 3, title: 'Intro' }, { start: 3, end: 9.5, title: 'Mid' }]);
+  assert.deepEqual(chapterMarks(clips, { sections: [{ name: 'Part B', clip: 'b' }] }, 2),
+    [{ start: 0, end: 6, title: 'Intro' }, { start: 6, end: 11.5, title: 'Part B' }]);
+  assert.deepEqual(chapterMarks(clips, {}), []);
+});
+
+test('chapterMetadata: ffmetadata escapes = ; # \\ and newlines', () => {
+  assert.equal(
+    chapterMetadata([{ start: 0, end: 1.5, title: 'a=b;c#d\\e\nf' }, { start: 1.5, end: 3, title: 'Two' }]),
+    ';FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=1500\ntitle=a\\=b\\;c\\#d\\\\e\\\nf\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=1500\nEND=3000\ntitle=Two\n',
+  );
+});
+
+test('chapters written the way the render does are readable with ffprobe', async t => {
+  let tools; try { tools = findFfmpegTools(); } catch { return t.skip('FFmpeg not available'); }
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'aes-chapters-'));
+  const plain = path.join(dir, 'plain.mp4'), tagged = path.join(dir, 'tagged.mp4'), meta = path.join(dir, 'chapters.ffmetadata');
+  await runProcess(tools.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=4', '-pix_fmt', 'yuv420p', plain]);
+  const chapters = [{ start: 0, end: 1.5, title: 'Intro = a;b' }, { start: 1.5, end: 4, title: 'Part B' }];
+  await fs.writeFile(meta, chapterMetadata(chapters), 'utf8');
+  await runProcess(tools.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-i', plain, '-i', meta, '-map', '0', '-map_chapters', '1', '-c', 'copy', tagged]);
+  const probe = await runProcess(tools.ffprobe, ['-v', 'error', '-show_chapters', '-of', 'json', tagged]);
+  const found = JSON.parse(probe.stdout).chapters;
+  assert.equal(found.length, 2);
+  assert.deepEqual(found.map(c => c.tags.title), ['Intro = a;b', 'Part B']);
+  assert.deepEqual(found.map(c => [Number(c.start_time), Number(c.end_time)]), [[0, 1.5], [1.5, 4]]);
+  await fs.rm(dir, { recursive: true, force: true });
+});
+
+test('chapterMarks: marks outside the edit are dropped and every chapter stays inside the programme', () => {
+const clips = [{ id: 'a', sourceIndex: 0, start: 1, end: 5 }, { id: 'b', sourceIndex: 1, start: 10, end: 13, speed: 1.5 }, { id: 'c', sourceIndex: 0, start: 20, end: 24, transition: 'fade', transitionSeconds: 0.5 }];
+const inRange = [{ start: 0, end: 3, title: 'Intro' }, { start: 3, end: 9.5, title: 'Mid' }];
+assert.deepEqual(chapterMarks(clips, { markers: [{ time: 3, label: 'Mid' }, { time: 12, label: 'Late' }] }), inRange);
+assert.deepEqual(chapterMarks(clips, { markers: [{ time: 3, label: 'Mid' }, { time: 9.5, label: 'End' }] }), inRange);
+assert.deepEqual(chapterMarks(clips, { markers: [{ time: 3, label: 'Mid' }, { time: 3, label: 'Again' }] }), inRange);
+assert.deepEqual(chapterMarks([{ id: 'a', sourceIndex: 0, start: 1, end: 5 }], { markers: [{ time: 10, label: 'Late' }] }), []);
+assert.deepEqual(chapterMarks(clips, { markers: [{ time: 3, label: 'Mid' }] }, 2),
+  [{ start: 0, end: 5, title: 'Intro' }, { start: 5, end: 11.5, title: 'Mid' }]);
 });

@@ -253,6 +253,26 @@ export function timecode(seconds, fps) {
 }
 const xml = v => String(v ?? '').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 const fileUrl = f => `file://${f.startsWith('/') ? '' : '/'}${encodeURI(f.replaceAll('\\', '/'))}`;
+/** Chapters shared by the chapters export and the MP4 render: sections first, else labelled markers.
+ * `offset` is the length of a brand intro in front of the programme; the first chapter always starts at 0:00.
+ * Marks at or past the end of the edit are dropped and each time gives one chapter, so 0 <= start < end <= programme end. */
+export function chapterMarks(clips, options = {}, offset = 0) {
+  const sections = sectionSpans(clips, options.sections ?? []);
+  const length = r3(totalDuration(clips));
+  const marks = (sections.length ? sections.map(s => ({ t: s.start, n: s.name })) : (options.markers ?? []).filter(m => m.label).map(m => ({ t: m.time, n: m.label })))
+    .filter(m => r3(m.t) < length)
+    .sort((a, b) => a.t - b.t)
+    .filter((m, i, all) => !i || r3(m.t) > r3(all[i - 1].t));
+  if (!marks.length) return [];
+  if (marks[0].t >= 1) marks.unshift({ t: 0, n: marks.some(m => m.n.toLowerCase() === 'intro') ? 'Start' : 'Intro' }); else marks[0].t = 0; // YouTube needs the first chapter at 0:00
+  const total = length + offset;
+  return marks.map((m, i) => ({ start: i ? r3(m.t + offset) : 0, end: r3(marks[i + 1] ? marks[i + 1].t + offset : total), title: m.n })).filter(c => c.start < c.end);
+}
+const escapeMeta = s => String(s).replace(/[=;#\\\n]/g, c => `\\${c}`);
+/** ffmetadata text for FFmpeg's -map_chapters (millisecond timebase). */
+export function chapterMetadata(chapters) {
+  return ';FFMETADATA1\n' + chapters.map(c => `[CHAPTER]\nTIMEBASE=1/1000\nSTART=${Math.round(c.start * 1000)}\nEND=${Math.round(c.end * 1000)}\ntitle=${escapeMeta(c.title)}\n`).join('');
+}
 export function exportTimeline({ format, clips, sources, options = {}, name = 'Edit', fps = 30 }) {
   const rows = layout(clips), sections = sectionSpans(clips, options.sections ?? []);
   if (format === 'srt' || format === 'vtt') {
@@ -285,12 +305,12 @@ export function exportTimeline({ format, clips, sources, options = {}, name = 'E
     const body = rows.map((r, i) => [i + 1, sec(i), r.label ?? '', sources[r.sourceIndex]?.name, r.start.toFixed(3), r.end.toFixed(3), r.visibleStart.toFixed(3), r.visibleEnd.toFixed(3), (r.visibleEnd - r.visibleStart).toFixed(3), r.speed ?? 1, r.transition ?? 'cut'].map(q).join(','));
     return { extension: 'csv', mime: 'text/csv', content: [head.join(','), ...body].join('\r\n') };
   }
-  if (format === 'chapters') {
-    const marks = (sections.length ? sections.map(s => ({ t: s.start, n: s.name })) : (options.markers ?? []).filter(m => m.label).map(m => ({ t: m.time, n: m.label }))).sort((a, b) => a.t - b.t);
-    if (!marks.length || marks[0].t >= 1) marks.unshift({ t: 0, n: marks.some(m => m.n.toLowerCase() === 'intro') ? 'Start' : 'Intro' }); else marks[0].t = 0; // YouTube needs the first chapter at 0:00
+    if (format === 'chapters') {
+    const marks = chapterMarks(clips, options);
+    if (!marks.length) marks.push({ start: 0, title: 'Intro' });
     const long = totalDuration(clips) >= 3600;
     const clock = t => (long ? `${Math.floor(t / 3600)}:${pad2(Math.floor(t / 60) % 60)}` : pad2(Math.floor(t / 60))) + `:${pad2(Math.floor(t % 60))}`;
-    return { extension: 'txt', mime: 'text/plain', content: marks.map(m => `${clock(m.t)} ${m.n}`).join('\n') };
+    return { extension: 'txt', mime: 'text/plain', content: marks.map(m => `${clock(m.start)} ${m.title}`).join('\n') };
   }
   // Voice-over / multicam sound and music as separate audio (FCPXML connected clips, OTIO audio track).
   const total = totalDuration(clips);

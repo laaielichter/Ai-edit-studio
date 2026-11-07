@@ -9,6 +9,7 @@ import { normalizeFinish, normalizeTransform, normalizeTransition, colorFilter, 
 import { audioRepairChain, SFX } from './polish.mjs';
 import { overlapOf, normalizeTexts } from '../public/edit-ops.js';
 import { normalizeCaptions, mapCaptions, toSrt } from '../public/captions.js';
+import { chapterMarks, chapterMetadata } from './longform.mjs';
 
 export const PREVIEW_SIZES = Object.freeze({ landscape: '1280x720', vertical: '720x1280', square: '720x720', portrait: '720x900' });
 function parseResolution(value, preview) {
@@ -490,7 +491,7 @@ export async function renderTrailer(plan, {
   fontFile: brandFont = '', colors = {}, logoPosition = 'top-left', logoScale = 0.13, logoOpacity = 1, intro = '', outro = '',
   captionAnimation = 'none', captionCase = 'normal', voiceEnhance = 'off', loudnessTarget = null, overlayClips = [],
   segmented = 'auto', cacheDir = null, segmentOptions = {},
-  lut = '', lutStrength = 1, progressBar = 'off', sfx = [], audioRepair = null,
+  lut = '', lutStrength = 1, progressBar = 'off', sfx = [], audioRepair = null, sections = [], markers = [], chapters = 'auto',
   tools = findFfmpegTools(),
   onProgress,
 } = {}) {
@@ -861,6 +862,25 @@ export async function renderTrailer(plan, {
     }
   }
 
+  let chapterList = [];
+  if (chapters === 'auto' && !preview) {
+    chapterList = chapterMarks(plan.clips, { sections, markers }, introSeconds);
+    if (chapterList.length) {
+      // One stream-copy remux covers the plain, brand-wrapped and segmented renders alike.
+      const meta = path.join(tmpRoot, 'chapters.ffmetadata'), tagged = outputPartialPath(finalOutput);
+      try {
+        await fs.writeFile(meta, chapterMetadata(chapterList), 'utf8');
+        await runProcess(tools.ffmpeg, ['-hide_banner', '-nostdin', '-n', '-i', partial, '-i', meta, '-map', '0', '-map_chapters', '1', '-c', 'copy', '-movflags', '+faststart', tagged], { timeoutMs: 10 * 60_000 });
+        await fs.rm(partial, { force: true });
+        await fs.rename(tagged, partial);
+      } catch (error) {
+        await fs.rm(tagged, { force: true }).catch(() => {});
+        await fs.rm(partial, { force: true }).catch(() => {});
+        throw new StudioError('RENDER_FAILED', `Writing chapters failed: ${error.message}`, { cause: error });
+      }
+    }
+  }
+
   onProgress?.({ phase: 'verify', progress: 0.99, output: finalOutput });
   let verified;
   try {
@@ -888,7 +908,7 @@ export async function renderTrailer(plan, {
     encoder: ffmpegInfo.capabilities.nvencReady ? 'h264_nvenc' : 'libx264',
     audioMix: 'normalised-before-gain-v3',
     finishing: finish,
-    captionCount: mappedCaptions.length, textCount: textFiles.length, introSeconds, segments: segmentReport ? { count: segmentReport.count, reused: segmentReport.reused, rendered: segmentReport.rendered } : null, captionAnimation: assFile ? captionAnimation : 'none',
+    captionCount: mappedCaptions.length, textCount: textFiles.length, introSeconds, segments: segmentReport ? { count: segmentReport.count, reused: segmentReport.reused, rendered: segmentReport.rendered } : null, captionAnimation: assFile ? captionAnimation : 'none', chapters: chapterList,
     brand: intro || outro || brandFont || Object.keys(colors).length ? { intro: intro || null, outro: outro || null, font: fontFile, colors } : undefined,
     narration: narration ? { file: path.resolve(narration), start: narrationStart, trimStart: narrationTrimStart, gain: narrationGain } : null,
     warnings,

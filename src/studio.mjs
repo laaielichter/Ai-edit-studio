@@ -327,7 +327,7 @@ async function renderFormats(current, formats, preview, previewFormat = 'landsca
     const preset = preview ? { resolution: PREVIEW_SIZES[previewFormat] ?? '1280x720', fps: 30, vertical: previewFormat !== 'landscape' } : EXPORT_PRESETS[format];
     current.message = `Rendering ${override?.label ?? (preview ? 'preview' : preset.name)} (${i + 1}/${formats.length})`;
     const rendered = await renderTrailer(plan, {
-      jobRoot, output: path.join(jobRoot, `${format}.mp4`), ...preset, ...options, ...(brand ? brandRenderOptions(brand, options) : {}),
+            jobRoot, output: path.join(jobRoot, `${format}.mp4`), ...preset, ...options, chapters: override ? 'off' : options.chapters, ...(brand ? brandRenderOptions(brand, options) : {}),
       overlayClips: (options.overlays ?? []).map(o => ({ ...o, file: current.sources[o.sourceIndex]?.file, hasAudio: Boolean(current.sources[o.sourceIndex]?.hasAudio) })),
       segmented: options.segmentedRender ?? 'auto', cacheDir: path.join(folder(id), 'render-cache'),
       preview, software: process.env.GAME_TRAILER_STUDIO_SOFTWARE === '1',
