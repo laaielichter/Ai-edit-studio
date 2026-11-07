@@ -98,6 +98,14 @@ test('transcript cues drop the caption limits; VTT reads header, settings, ids a
   ]);
   assert.deepEqual(cues.map(c => c.text), ['Hello there', 'Short times on both sides', 'Full form end']);
 });
+test('VTT import decodes HTML entities in cue text after stripping tags', () => {
+  const cues = parseVttCues('WEBVTT\n\n00:01.000 --> 00:02.000\nTom &amp; Jerry &lt;3 &quot;hi&quot; &#39;ok&apos; ok&nbsp;é &#233; &#xE9;');
+  assert.equal(cues[0].text, 'Tom & Jerry <3 "hi" \'ok\' ok é é é');
+  const tagged = parseVttCues('WEBVTT\n\n00:01.000 --> 00:02.000\n&lt;b&gt;bold&lt;/b&gt;');
+  assert.equal(tagged[0].text, '<b>bold</b>');
+  const proto = parseVttCues('WEBVTT\n\n00:01.000 --> 00:02.000\n&constructor; &amp;lt; &amp;');
+  assert.equal(proto[0].text, '&constructor; &lt; &');
+});
 test('silence proposal is non-mutating, preserves padding and protected final shot', () => {
   const s = { ...source, audio: Array.from({ length: 20 }, (_, i) => ({ time: i / 2, value: i >= 6 && i < 12 ? -90 : -10 })) };
   const plan = validateClips([clip], [s]); const before = JSON.stringify(plan);

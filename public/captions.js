@@ -56,6 +56,20 @@ function vttStamp(value) {
   if (!m) throw new Error('VTT requires times like 00:00:04.000.');
   return (m[1] ? +m[1] * 3600 : 0) + +m[2] * 60 + +m[3] + +m[4] / 1000;
 }
+const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' ' };
+/** Decode the HTML entities WebVTT requires in cue text (`&amp;` `&lt;` `&gt;`) plus the ones
+ * YouTube downloads use (`&quot;` `&#39;`/`&apos;` `&nbsp;` as a normal space) and numeric forms
+ * like `&#233;` / `&#xE9;`. Unknown named entities are left as written, and one pass decodes
+ * exactly once, so `&amp;lt;` stays the literal text `&lt;`. */
+function decodeEntities(text) {
+  return text.replace(/&(?:[a-z]+|#[0-9]+|#x[0-9a-fA-F]+);/gi, entity => {
+    const name = entity.slice(1, -1).toLowerCase();
+    if (Object.hasOwn(NAMED_ENTITIES, name)) return NAMED_ENTITIES[name];
+    if (name[0] !== '#') return entity;
+    const code = name[1] === 'x' ? parseInt(name.slice(2), 16) : +name.slice(1);
+    return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+  });
+}
 /** WebVTT as transcript cues: skips the header block (Kind:/Language: lines after WEBVTT) and
  * NOTE/STYLE/REGION blocks, accepts cue identifiers, ignores cue settings after the end time,
  * and reads `mm:ss.ttt` or `hh:mm:ss.ttt` on both sides of --> (YouTube downloads). */
@@ -70,7 +84,7 @@ export function parseVttCues(text, sourceIndex = 0) {
     if (at < 0) continue;
     const [from, to] = lines[at].split('-->');
     if (!to) continue;
-    const cueText = lines.slice(at + 1).join(' ').replace(/<[^>]*>/g, '').trim();
+    const cueText = decodeEntities(lines.slice(at + 1).join(' ').replace(/<[^>]*>/g, '')).trim();
     if (!cueText) continue;
     out.push({ sourceIndex, start: vttStamp(from.trim().split(/\s+/)[0]), end: vttStamp(to.trim().split(/\s+/)[0]), text: cueText });
   }
