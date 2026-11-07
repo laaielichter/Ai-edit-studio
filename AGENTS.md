@@ -12,6 +12,8 @@ four doors for agents, all exposing the **same 59 tools with the same JSON schem
 | **OpenAPI** | `GET /api/openapi.json` (3.1, generated from the same schemas) | GPT Actions, OpenAPI tool loaders |
 | **CLI** | `node cli.mjs studio <tool> --request file.json [--wait]` | shell agents, scripts |
 
+`node cli.mjs studio <tool> --help` lists the flags of one tool. They come from its schema (`--project-id`, `--dry-run`, `--timeout-seconds`, ...) and `--request` still takes the full JSON.
+
 Set up every agent app at once: `node cli.mjs install` (see INSTALL.md). The server listens on `http://127.0.0.1:32146` (env `GAME_TRAILER_STUDIO_PORT`). CLI and MCP start
 the hidden daemon when needed; HTTP callers start it with `node server.mjs` or the start script.
 Send `X-Studio-Client: <your-agent-name>` on HTTP calls: the editor shows your name on every revision.

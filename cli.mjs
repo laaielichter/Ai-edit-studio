@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
-import { agentTools, runStudioCommand } from './src/agent-tools.mjs';
+import { agentTools, runStudioCommand, studioHelp } from './src/agent-tools.mjs';
 import { isMainModule } from './src/main-module.mjs';
 import { inspectFfmpeg } from './src/ffmpeg.mjs';
 import { DATA_ROOT, PROJECT_ROOT, StudioError, ensureDataRoot, safeResolveWithin } from './src/paths.mjs';
@@ -224,6 +224,7 @@ async function main() {
   const { positional, flags } = parseArguments(process.argv.slice(2));
   const [command, subcommand, third] = positional;
   const jsonMode = boolFlag(flags.json, false);
+  if (command === 'studio' && subcommand && flags.help) return console.log(studioHelp(subcommand));
   if (!command || command === 'help' || flags.help) return help();
   // MCP over stdio for `npx -y ai-edit-studio mcp` (the registry entry uses this). Print nothing before it starts.
   if (command === 'mcp') { await import('./mcp.mjs'); return; }

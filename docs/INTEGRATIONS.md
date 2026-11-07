@@ -112,6 +112,8 @@ The server only listens on 127.0.0.1. n8n/Make on the same computer can reach it
 ```bash
 node cli.mjs studio auto_edit --request job.json --wait
 node cli.mjs studio qc --project <id>
+node cli.mjs studio qc --help
+node cli.mjs studio wait --project <id> --timeout-seconds 60
 ```
 
 ## First prompt to try

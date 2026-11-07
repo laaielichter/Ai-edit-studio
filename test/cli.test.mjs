@@ -76,3 +76,64 @@ test('a request file holding an object still reaches the tool', async t => {
   await runStudioCommand('get', { request }, api);
   assert.deepEqual(calls, ['/health', '/studio/projects/00000000-0000-0000-0000-000000000001']);
 });
+
+const ID = '00000000-0000-0000-0000-000000000001';
+
+function capture() {
+  const calls = [];
+  const api = async (route, req) => { calls.push({ route, body: req?.body }); return okApi(route, req); };
+  return { calls, api };
+}
+
+test('studio <tool> --help prints the flags of that tool', () => {
+  const env = { ...process.env, GAME_TRAILER_STUDIO_DATA_ROOT: path.join(ROOT, '.studio-data', 'cli-test') };
+  const run = args => spawnSync(process.execPath, [path.join(ROOT, 'cli.mjs'), ...args], { encoding: 'utf8', env });
+  const edit = run(['studio', 'edit', '--help']);
+  assert.equal(edit.status, 0, edit.stderr);
+  assert.match(edit.stdout, /studio_edit/);
+  assert.match(edit.stdout, /--revision/);
+  assert.match(edit.stdout, /--operations/);
+  assert.match(edit.stdout, /--project-id[^\n]*required/);
+  const unknown = run(['studio', 'nope', '--help']);
+  assert.notEqual(unknown.status, 0);
+  assert.match(unknown.stderr, /UNKNOWN_TOOL/);
+});
+
+test('studio wait and qc take their arguments as flags', async () => {
+  const { calls, api } = capture();
+  await runStudioCommand('wait', { project: ID, until: 'idle', 'timeout-seconds': '30' }, api);
+  assert.equal(calls.at(-1).route, `/studio/projects/${ID}/wait`);
+  assert.deepEqual(calls.at(-1).body, { until: 'idle', timeoutSeconds: 30 });
+  await runStudioCommand('qc', { 'project-id': ID, 'export-id': ID }, api);
+  assert.equal(calls.at(-1).route, `/studio/projects/${ID}/qc`);
+  assert.deepEqual(calls.at(-1).body, { exportId: ID });
+});
+
+test('flags override the request file, including --no-<flag> for booleans', async t => {
+  const request = await requestFile(t, JSON.stringify({ projectId: ID, revision: 1, preview: true, formats: ['hd'] }));
+  const { calls, api } = capture();
+  await runStudioCommand('render', { request, preview: false }, api);
+  assert.deepEqual(calls.at(-1).body, { revision: 1, preview: false, formats: ['hd'] });
+});
+
+test('the flags that worked before still produce the same arguments', async () => {
+  const { calls, api } = capture();
+  await runStudioCommand('render', { project: ID, revision: '3', formats: 'landscape,vertical', preview: true }, api);
+  assert.equal(calls.at(-1).route, `/studio/projects/${ID}/export`);
+  assert.deepEqual(calls.at(-1).body, { revision: 3, formats: ['landscape', 'vertical'], preview: true });
+});
+
+test('bad flags fail with a clear error before reaching the tool', async () => {
+  await assert.rejects(
+    runStudioCommand('qc', { project: ID, 'nope-flag': '1' }, okApi),
+    error => error.code === 'UNKNOWN_FLAG' && /--nope-flag/.test(error.message) && /--export-id/.test(error.message),
+  );
+  await assert.rejects(
+    runStudioCommand('wait', { project: ID, 'timeout-seconds': 'soon' }, okApi),
+    error => error.code === 'INVALID_ARGUMENTS' && /--timeout-seconds/.test(error.message),
+  );
+  await assert.rejects(
+    runStudioCommand('edit', { project: ID, revision: '1', operations: 'not json' }, okApi),
+    error => error.code === 'INVALID_ARGUMENTS' && /not valid JSON/.test(error.message),
+  );
+});

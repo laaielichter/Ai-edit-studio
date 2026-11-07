@@ -110,6 +110,8 @@ leaves your machine; originals are only read.
 | OpenAPI 3.1 | `GET /api/openapi.json` |
 | CLI | `node cli.mjs studio <tool> --request file.json [--wait]` |
 
+`node cli.mjs studio <tool> --help` lists the flags of one tool. They come from its schema (`--project-id`, `--dry-run`, `--timeout-seconds`, ...) and `--request` still takes the full JSON.
+
 One call from footage to renders: `studio_auto_edit`. Text-based editing: `studio_transcribe`, `studio_transcript`,
 `studio_text_edit`. Plus `studio_reframe`, `studio_publish_pack`, `studio_brand`. Atomic `studio_edit` batches on stable clip ids (with `dryRun`), `studio_timeline` + `studio_storyboard`
 to see the edit, `studio_review` with machine-applicable fixes, beats, highlights, styles, caption

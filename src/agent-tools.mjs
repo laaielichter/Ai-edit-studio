@@ -391,6 +391,79 @@ async function runBatch(args, api) {
   return { tool, projects: ids.length, ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, results };
 }
 
+const CLI_FLAGS = new Set(['request', 'wait', 'json', 'help']);
+const kebab = name => name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);
+const camel = flag => flag.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+function flagType(schema) {
+  if (schema.anyOf) return schema.anyOf.filter(v => v.type !== 'null').map(flagType).join('|');
+  if (schema.enum) return schema.enum.join('|');
+  if (schema.type === 'boolean') return 'true|false';
+  if (schema.type === 'integer' || schema.type === 'number') return 'number';
+  if (schema.type === 'array' && schema.items?.type === 'string') return 'a,b,c';
+  if (schema.type === 'array' || schema.type === 'object') return 'JSON';
+  return 'text';
+}
+
+function convertOne(flag, raw, schema) {
+  if (schema.anyOf) {
+    let first;
+    for (const variant of schema.anyOf.filter(v => v.type !== 'null')) {
+      try {
+        const value = convertOne(flag, raw, variant);
+        validateArguments(value, variant, `--${flag}`);
+        return value;
+      } catch (error) { first ??= error; }
+    }
+    throw first;
+  }
+  if (schema.type === 'boolean') {
+    if (raw === true || raw === 'true') return true;
+    if (raw === false || raw === 'false') return false;
+    throw new StudioError('INVALID_ARGUMENTS', `--${flag}: expected true or false.`);
+  }
+  if (raw === true) throw new StudioError('INVALID_ARGUMENTS', `--${flag}: needs a value.`);
+  if (raw === false) throw new StudioError('INVALID_ARGUMENTS', `--no-${flag} only works on true/false flags.`);
+  if (schema.type === 'integer' || schema.type === 'number') {
+    const value = Number(raw);
+    if (raw === '' || !Number.isFinite(value)) throw new StudioError('INVALID_ARGUMENTS', `--${flag}: "${raw}" is not a number.`);
+    return value;
+  }
+  if (schema.type === 'array' || schema.type === 'object') {
+    if (schema.type === 'array' && schema.items?.type === 'string') return String(raw).split(',');
+    try { return JSON.parse(raw); } catch { throw new StudioError('INVALID_ARGUMENTS', `--${flag}: not valid JSON (expected a JSON ${schema.type}).`); }
+  }
+  return String(raw);
+}
+
+function flagArguments(tool, flags) {
+  const properties = tool.inputSchema.properties ?? {};
+  const args = {};
+  for (const [flag, raw] of Object.entries(flags)) {
+    if (CLI_FLAGS.has(flag)) continue;
+    const key = flag === 'project' ? 'projectId' : camel(flag);
+    if (!Object.hasOwn(properties, key)) {
+      const known = ['--request', '--wait', ...Object.keys(properties).map(name => `--${kebab(name)}`)];
+      throw new StudioError('UNKNOWN_FLAG', `--${flag} is not an argument of ${tool.name}. Flags: ${known.join(', ')}.`);
+    }
+    args[key] = convertOne(flag, raw, properties[key]);
+  }
+  return args;
+}
+
+export function studioHelp(command) {
+  const tool = agentTools.find(t => t.name === `studio_${command}`);
+  if (!tool) throw new StudioError('UNKNOWN_TOOL', `Unknown tool: studio_${command}. Tools: ${agentTools.map(t => t.name.replace(/^studio_/, '')).join(', ')}.`);
+  const { properties = {}, required = [] } = tool.inputSchema;
+  const lines = [`${tool.name}: ${tool.description}`, '', `Usage: node cli.mjs studio ${command} [flags]`, '', 'Flags:'];
+  for (const [name, schema] of Object.entries(properties)) {
+    lines.push(`  --${kebab(name)} <${flagType(schema)}>${required.includes(name) ? '  (required)' : ''}${name === 'projectId' ? '  (alias: --project)' : ''}`);
+  }
+  lines.push('  --request <file.json|->  JSON arguments from a file or stdin; flags override it');
+  lines.push('  --wait  poll until the project is idle');
+  return lines.join('\n');
+}
+
 export async function runStudioCommand(command, flags, api) {
   let args = {};
   if (flags.request) {
@@ -399,16 +472,9 @@ export async function runStudioCommand(command, flags, api) {
     try { args = JSON.parse(content.replace(/^\uFEFF/, '')); } catch { throw new StudioError('INVALID_JSON', 'Request must be a JSON object.'); }
     if (args === null || typeof args !== 'object' || Array.isArray(args)) throw new StudioError('INVALID_JSON', 'Request must be a JSON object.');
   }
-  if (flags.project) args.projectId = String(flags.project);
-  if (flags.revision) args.revision = Number(flags.revision);
-  if (flags.formats) args.formats = String(flags.formats).split(',');
-  if (flags.preview !== undefined) args.preview = flags.preview === true || flags.preview === 'true';
-  if (flags.from !== undefined) args.from = Number(flags.from);
-  if (flags.to !== undefined) args.to = Number(flags.to);
-  if (flags['to-revision'] !== undefined) args.toRevision = Number(flags['to-revision']);
-  if (flags.target !== undefined) args.target = Number(flags.target);
-  for (const key of ['query', 'format', 'action', 'quality']) if (flags[key] !== undefined && flags[key] !== true) args[key] = String(flags[key]);
-  if (flags['dry-run'] !== undefined) args.dryRun = flags['dry-run'] === true || flags['dry-run'] === 'true';
+  const tool = agentTools.find(t => t.name === `studio_${command}`);
+  if (!tool) throw new StudioError('UNKNOWN_TOOL', `Unknown tool: studio_${command}`);
+  Object.assign(args, flagArguments(tool, flags));
   let result = await callAgentTool(`studio_${command}`, args, api);
   for (const key of ['frame', 'storyboard']) if (result[key]?.imageBase64) { const { imageBase64, ...rest } = result[key]; result = { ...result, [key]: rest }; }
   if (flags.wait === true || flags.wait === 'true') {
