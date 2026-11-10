@@ -14,8 +14,8 @@ import { curvesFor, clipEnergy } from '../public/insights.js';
 import { mapCaptions, toSrt, toVtt } from '../public/captions.js';
 
 export const PUBLISH_PLATFORMS = Object.freeze({
-  youtube: { name: 'YouTube', titleMax: 100, descriptionMax: 5000, tags: [] },
-  shorts: { name: 'YouTube Shorts', titleMax: 100, descriptionMax: 5000, tags: ['shorts'] },
+  youtube: { name: 'YouTube', titleMax: 100, descriptionMax: 5000, tags: [], noAngleBrackets: true },
+  shorts: { name: 'YouTube Shorts', titleMax: 100, descriptionMax: 5000, tags: ['shorts'], noAngleBrackets: true },
   tiktok: { name: 'TikTok', titleMax: 0, descriptionMax: 2200, tags: [] },
   reels: { name: 'Instagram Reels', titleMax: 0, descriptionMax: 2200, tags: ['reels'] },
   x: { name: 'X', titleMax: 0, descriptionMax: 280, tags: [] },
@@ -32,6 +32,7 @@ const shorten = (text, max) => {
   return `${whole.trimEnd()}…`;
 };
 const filterPath = value => path.resolve(value).replaceAll('\\', '/').replace(':', '\\:').replaceAll("'", "\\'");
+const stripAngleBrackets = s => String(s).replace(/</g, '‹').replace(/>/g, '›');
 
 /** YouTube-style chapters (first at 0:00, ≥3 chapters, ≥10 s apart) from labelled markers or clip labels. */
 export function chapters(clips, options = {}) {
@@ -69,16 +70,21 @@ export function metadataDrafts({ title, brief, cta, chapterList = [], tags = [],
   const out = {};
   for (const id of platforms) {
     const p = PUBLISH_PLATFORMS[id]; if (!p) continue;
+    // YouTube rejects < and > in titles and descriptions; sanitize for platforms that need it
+    const sanitize = p.noAngleBrackets ? stripAngleBrackets : s => s;
+    const platformBase = sanitize(base);
+    const platformAbout = sanitize(about);
+    const platformCta = cta ? sanitize(clean(cta, 100)) : '';
     const list = uniqueHashtags([...p.tags, ...tags]).slice(0, id === 'x' ? 2 : 6).map(t => `#${t}`);
     // The call to action, the chapter list and the hashtags have to survive the cut, so the brief is what gets shortened.
-    const tail = [cta ? clean(cta, 100) : '', id === 'youtube' && chapterList.length ? `\n${chapterList.map(c => c.line).join('\n')}` : '', list.join(' ')].filter(Boolean);
+    const tail = [platformCta, id === 'youtube' && chapterList.length ? `\n${chapterList.map(c => c.line).join('\n')}` : '', list.join(' ')].filter(Boolean);
     const fixed = tail.length ? `\n\n${tail.join('\n\n')}` : '';
-    let head = about || base;
+    let head = platformAbout || platformBase;
     if (head.length + fixed.length > p.descriptionMax) head = shorten(head, p.descriptionMax - fixed.length);
     const pieces = [head, ...tail].filter(Boolean);
     let description = pieces.join('\n\n');
     if (description.length > p.descriptionMax) description = shorten(description, p.descriptionMax);
-    out[id] = { platform: p.name, ...(p.titleMax ? { title: base.slice(0, p.titleMax) } : {}), description, hashtags: list, draft: true };
+    out[id] = { platform: p.name, ...(p.titleMax ? { title: platformBase.slice(0, p.titleMax) } : {}), description, hashtags: list, draft: true };
   }
   return out;
 }
