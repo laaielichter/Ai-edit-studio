@@ -163,6 +163,11 @@ test('publish: chapters, drafts, hashtags and frame quality', () => {
   assert.deepEqual(chapters(clips.slice(0, 2), {}), []);
   const tags = hashtags('AH-64 Apache laser guided missiles', 'Our helicopter game');
   assert.ok(tags.includes('apache') && tags.includes('laser') && !tags.includes('our'));
+  // Test that common function words are filtered out (#61)
+  const enTags = hashtags('Everything about our new update', 'Here are some things that would make your base better and where to find them');
+  assert.ok(enTags.includes('update') && !enTags.includes('about') && !enTags.includes('here') && !enTags.includes('some') && !enTags.includes('everything'));
+  const nlTags = hashtags('Alles over onze nieuwe update', 'Hier zijn enkele dingen die jouw basis beter maken, omdat ze echt werken');
+  assert.ok(nlTags.includes('update') && !nlTags.includes('alles') && !nlTags.includes('nieuwe') && !nlTags.includes('hier') && !nlTags.includes('enkele'));
   const d = metadataDrafts({ title: 'Apache strike', brief: 'Cockpit footage.', cta: 'Wishlist now', chapterList: ch, tags, platforms: ['youtube', 'x', 'shorts'] });
   assert.equal(d.youtube.title, 'Apache strike'); assert.match(d.youtube.description, /00:15 Takeoff/);
   assert.ok(d.x.description.length <= 280); assert.ok(d.shorts.hashtags.includes('#shorts'));
@@ -192,6 +197,28 @@ test('publish drafts deduplicate hashtags before applying each platform limit', 
   assert.deepEqual(d.shorts.hashtags, ['#shorts', '#GameDev', '#trailer']);
   const x = metadataDrafts({ title: 'T', tags: ['GameDev', 'gamedev', 'Indie'], platforms: ['x'] }).x;
   assert.deepEqual(x.hashtags, ['#GameDev', '#Indie']);
+});
+
+test('publish: YouTube and Shorts drafts strip angle brackets from title and description', () => {
+  const d = metadataDrafts({
+    title: 'Boss fight <3 > everything',
+    brief: 'New level <beta> is out',
+    cta: 'Play now',
+    platforms: ['youtube', 'shorts', 'tiktok', 'x']
+  });
+  // YouTube and Shorts should have no < or > in title or description
+  assert.ok(!d.youtube.title.includes('<') && !d.youtube.title.includes('>'), 'youtube title has angle brackets');
+  assert.ok(!d.youtube.description.includes('<') && !d.youtube.description.includes('>'), 'youtube description has angle brackets');
+  assert.ok(!d.shorts.title.includes('<') && !d.shorts.title.includes('>'), 'shorts title has angle brackets');
+  assert.ok(!d.shorts.description.includes('<') && !d.shorts.description.includes('>'), 'shorts description has angle brackets');
+  // The angle brackets should be replaced with look-alike characters
+  assert.ok(d.youtube.title.includes('‹') || d.youtube.title.includes('›'), 'youtube title should have replacement characters');
+  // Other platforms should be unchanged
+  assert.equal(d.tiktok.description.includes('<'), true, 'tiktok description should keep angle brackets');
+  assert.equal(d.x.description.includes('<'), true, 'x description should keep angle brackets');
+  // Description should still fit within limits
+  assert.ok(d.youtube.description.length <= 5000);
+  assert.ok(d.shorts.description.length <= 5000);
 });
 
 test('publish pack deduplicates brand and title hashtags before taking six', async t => {
