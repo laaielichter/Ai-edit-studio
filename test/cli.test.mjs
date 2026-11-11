@@ -6,7 +6,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { agentTools, runStudioCommand } from '../src/agent-tools.mjs';
+import { agentTools, runStudioCommand, studioHelp } from '../src/agent-tools.mjs';
 import { parseArguments } from '../cli.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -120,6 +120,31 @@ test('studio <tool> --help prints the flags of that tool', () => {
   const unknown = run(['studio', 'nope', '--help']);
   assert.notEqual(unknown.status, 0);
   assert.match(unknown.stderr, /UNKNOWN_TOOL/);
+});
+
+test('studio tool names accept hyphens and any case', async () => {
+  assert.equal(studioHelp('auto-edit'), studioHelp('auto_edit'));
+  assert.equal(studioHelp('Auto_Edit'), studioHelp('auto_edit'));
+  const { calls, api } = capture();
+  await runStudioCommand('GET', { project: ID }, api);
+  assert.equal(calls.at(-1).route, `/studio/projects/${ID}`);
+  await runStudioCommand('find-clips', { project: ID }, api);
+  assert.ok(calls.length > 1, 'the hyphenated name must reach the tool');
+});
+
+test('an unknown studio tool lists the tools and suggests a close name', async () => {
+  await assert.rejects(
+    runStudioCommand('nosuchtool', {}, okApi),
+    error => error.code === 'UNKNOWN_TOOL' && /Tools: /.test(error.message) && /auto_edit/.test(error.message),
+  );
+  await assert.rejects(
+    runStudioCommand('auto-edi', {}, okApi),
+    error => error.code === 'UNKNOWN_TOOL' && /Did you mean `auto_edit`\?/.test(error.message),
+  );
+  assert.throws(
+    () => studioHelp('nosuchtool'),
+    error => error.code === 'UNKNOWN_TOOL' && /Tools: /.test(error.message),
+  );
 });
 
 test('studio wait and qc take their arguments as flags', async () => {

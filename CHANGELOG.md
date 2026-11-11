@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Studio tool names forgive hyphens and case**: `studio auto-edit` and `studio Auto_Edit` now run `studio_auto_edit`, and an unknown tool name answers with the list of tools (plus a "Did you mean" suggestion when a name is close) instead of a bare error (#101).
+
 ## 0.12.0 — captions, chapters and a friendlier CLI
 
 Better subtitles in and out, chapters inside the MP4, exact NTSC frame rates and a CLI that explains itself. 59 tools, nothing removed.
