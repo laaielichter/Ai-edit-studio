@@ -1260,8 +1260,12 @@ export async function freezeFrame(id, request = {}) {
   if (project.sources.length >= LIMITS.sources) throw new StudioError('TOO_MANY_SOURCES', `A project has at most ${LIMITS.sources} sources.`);
   const { layout: lay, clipAt } = await import('../public/edit-ops.js');
   const at = Number(request.at), seconds = Math.max(0.5, Math.min(10, Number(request.seconds) || 1.5));
+  const editEnd = lay(project.plan.clips).at(-1)?.timelineEnd ?? 0;
   const hit = clipAt(project.plan.clips, at);
-  if (!hit || !Number.isFinite(at)) throw new StudioError('INVALID_ARGUMENTS', 'at: a timeline time inside the edit.');
+  // clipAt() clamps to the last shot, so a late time would grab a frame that does not exist; the range is checked here (#132).
+  if (!hit || !Number.isFinite(at) || at >= editEnd) {
+    throw new StudioError('INVALID_ARGUMENTS', `at: a timeline time inside the edit (0–${Number(editEnd.toFixed(2))} s).`);
+  }
   const clip = project.plan.clips[hit.index], source = project.sources[clip.sourceIndex];
   if (source.still) throw new StudioError('INVALID_ARGUMENTS', 'This shot is already a still image.');
   await validateSourceState(project);
@@ -1271,7 +1275,6 @@ export async function freezeFrame(id, request = {}) {
   const stat = await fs.stat(file);
   project.sources.push({ ...info, file, size: stat.size, mtimeMs: stat.mtimeMs, name: `Freeze ${formatClock(at)}`, hasAudio: false, still: true, motion: [], audio: [], scenes: [], black: [] });
   const sourceIndex = project.sources.length - 1;
-  void lay;
   try {
     return await editProject(id, { revision: request.revision, author: request.author, summary: `Freeze frame at ${at.toFixed(2)} s (${seconds} s)`,
       operations: [{ op: 'insert', sourceIndex, start: 0, end: seconds, at, label: 'freeze', ...(request.zoomEnd ? { framing: 'fill', zoom: 1, zoomEnd: Math.min(1.4, Number(request.zoomEnd)) } : {}) }] });
