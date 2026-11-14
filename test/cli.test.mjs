@@ -92,6 +92,22 @@ test('a request file that is not a JSON object is refused with INVALID_JSON', as
   }
 });
 
+test('a missing or directory request file is refused with a studio error code', async t => {
+  const missing = path.join(os.tmpdir(), 'aes-request-missing-12345.json');
+  await assert.rejects(
+    runStudioCommand('get', { request: missing }, okApi),
+    error => error.code === 'FILE_NOT_FOUND' && error.message === `File not found: ${missing}`,
+    'a missing request file must answer FILE_NOT_FOUND',
+  );
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'aes-request-dir-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  await assert.rejects(
+    runStudioCommand('get', { request: dir }, okApi),
+    error => error.code === 'INVALID_ARGUMENTS' && error.message === `--request must be a file, got a folder: ${dir}`,
+    'a directory request path must answer INVALID_ARGUMENTS',
+  );
+});
+
 test('a request file holding an object still reaches the tool', async t => {
   const request = await requestFile(t, '{"projectId": "00000000-0000-0000-0000-000000000001"}');
   const calls = [];

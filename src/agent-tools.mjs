@@ -494,7 +494,19 @@ export function studioHelp(command) {
 export async function runStudioCommand(command, flags, api) {
   let args = {};
   if (flags.request) {
-    const content = flags.request === '-' ? await readStdin() : await fs.readFile(String(flags.request), 'utf8');
+    let content;
+    if (flags.request === '-') {
+      content = await readStdin();
+    } else {
+      const file = String(flags.request);
+      try {
+        content = await fs.readFile(file, 'utf8');
+      } catch (error) {
+        if (error?.code === 'ENOENT') throw new StudioError('FILE_NOT_FOUND', `File not found: ${file}`);
+        if (error?.code === 'EISDIR') throw new StudioError('INVALID_ARGUMENTS', `--request must be a file, got a folder: ${file}`);
+        throw error;
+      }
+    }
     if (content.length > 12 * 1024 * 1024) throw new StudioError('REQUEST_TOO_LARGE', 'Request exceeds 12 MiB.');
     try { args = JSON.parse(content.replace(/^\uFEFF/, '')); } catch { throw new StudioError('INVALID_JSON', 'Request must be a JSON object.'); }
     if (args === null || typeof args !== 'object' || Array.isArray(args)) throw new StudioError('INVALID_JSON', 'Request must be a JSON object.');
