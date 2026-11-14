@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A mistyped `GAME_TRAILER_STUDIO_PORT` is reported as `INVALID_PORT` right away:** `health()` used to swallow the error while deciding whether the server was up, so the CLI started a doomed daemon and answered `SERVER_START_FAILED` with a pointer to `server.log`. The port is now checked before anything is started or logged, and the message names the variable and the 1–65535 range. Thanks to @17302513901yh-lang! (#133)
 - **Long Chinese and Japanese thumbnail and cover titles wrap by display width:** Han, Hiragana, Katakana and full-width punctuation count as two units, so a 22-unit thumbnail line holds eleven such characters and a 12-unit cover line holds six; a long CJK run inside a spaced title is cut too, Latin titles wrap exactly as before, and the ellipsis fits the width. Thanks to @17302513901yh-lang! (#97, #127)
 - **CJK queries and scripts work in `studio_search` and `studio_assemble`:** search queries and script lines are segmented with `splitWords()` like transcripts, so a Chinese or Japanese phrase typed without spaces now matches. Thanks to @17302513901yh-lang! (#122, #126)
 - Fix publish-pack YouTube chapters to use edit sections before falling back to labelled markers or clip labels. Thanks to @matiasad! (#121, #125)

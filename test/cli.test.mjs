@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { agentTools, runStudioCommand } from '../src/agent-tools.mjs';
-import { parseArguments } from '../cli.mjs';
+import { parseArguments, validatePort } from '../cli.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -159,4 +160,32 @@ test('bad flags fail with a clear error before reaching the tool', async () => {
     runStudioCommand('edit', { project: ID, revision: '1', operations: 'not json' }, okApi),
     error => error.code === 'INVALID_ARGUMENTS' && /not valid JSON/.test(error.message),
   );
+});
+
+test('a bad GAME_TRAILER_STUDIO_PORT is INVALID_PORT before a server is started (#133)', () => {
+  const dataRoot = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ai-edit-port-'));
+  const base = { ...process.env, GAME_TRAILER_STUDIO_DATA_ROOT: dataRoot };
+  for (const bad of ['abc', '99999']) {
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'cli.mjs'), 'jobs'], {
+      encoding: 'utf8', env: { ...base, GAME_TRAILER_STUDIO_PORT: bad }, timeout: 20_000,
+    });
+    assert.equal(result.status, 1, `exit code for ${bad}: ${result.stderr}`);
+    const record = JSON.parse(result.stderr);
+    assert.equal(record.ok, false);
+    assert.equal(record.error.code, 'INVALID_PORT', `code for ${bad}: ${result.stderr}`);
+    assert.match(record.error.message, new RegExp(`Invalid local server port: ${bad}`));
+    assert.match(record.error.message, /GAME_TRAILER_STUDIO_PORT/);
+    assert.match(record.error.message, /1 to 65535/);
+    assert.doesNotMatch(result.stderr, /SERVER_START_FAILED/, 'must not point at server.log');
+  }
+  assert.equal(fsSync.existsSync(path.join(dataRoot, 'logs', 'server.log')), false,
+    'no server.log means no daemon was spawned and no log dir was created');
+  // A valid port and the default are still accepted; only bad values are refused.
+  assert.equal(validatePort('32146'), 32146);
+  assert.equal(validatePort(1), 1);
+  assert.equal(validatePort('65535'), 65535);
+  for (const bad of ['abc', '0', '65536', '-1', '12.5', '']) {
+    assert.throws(() => validatePort(bad), error => error.code === 'INVALID_PORT'
+      && /GAME_TRAILER_STUDIO_PORT/.test(error.message), `refused ${JSON.stringify(bad)}`);
+  }
 });

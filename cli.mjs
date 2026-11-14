@@ -9,10 +9,10 @@ import { inspectFfmpeg } from './src/ffmpeg.mjs';
 import { DATA_ROOT, PROJECT_ROOT, StudioError, ensureDataRoot, safeResolveWithin } from './src/paths.mjs';
 
 const DEFAULT_PORT = 32146;
-function validatePort(value) {
+export function validatePort(value) {
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new StudioError('INVALID_PORT', `Invalid local server port: ${value}.`);
+    throw new StudioError('INVALID_PORT', `Invalid local server port: ${value}. Set GAME_TRAILER_STUDIO_PORT to a number from 1 to 65535.`);
   }
   return port;
 }
@@ -94,10 +94,14 @@ export async function api(pathname, { method = 'GET', body, start = true } = {})
 }
 
 async function health() {
+  // Build the URL outside the try: the catch below means "no server is running",
+  // and swallowing INVALID_PORT there made the CLI start a doomed daemon and
+  // point at server.log instead of telling the user about the bad variable (#133).
+  const url = `${apiRoot()}/health`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 800);
   try {
-    const response = await fetch(`${apiRoot()}/health`, {
+    const response = await fetch(url, {
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });
@@ -119,6 +123,9 @@ async function ensureDaemon() {
   return daemonStart;
 }
 async function startDaemon() {
+  // Validate before any file is created or a server is spawned: a bad port is a
+  // CLI argument error, not a failed startup (#133).
+  serverPort();
   if (await health()) return;
   await ensureDataRoot(0);
   const logRoot = safeResolveWithin(DATA_ROOT, 'logs');
