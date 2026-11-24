@@ -1,6 +1,6 @@
 # Contributing to AI Edit Studio
 
-Thanks for helping. Small fixes and big ideas are both welcome.
+Thanks for helping. Small fixes and big ideas are both welcome. Starring the repo is a simple way to keep it in your list and helps others find it, but it is never needed to get an issue, help or a review.
 
 ## Ways to help
 
@@ -47,6 +47,7 @@ editor with `npm start`.
 2. Add or update tests, and the docs when behaviour changes.
 3. Run `node --test` before you push.
 4. Describe what changed and why, and how you tested it.
+5. Do not edit `CHANGELOG.md` in your pull request; the maintainer adds the entry, with credit to you, when it is merged. This keeps pull requests from conflicting with each other.
 
 First-time contributors: CI waits for a maintainer to approve the first run. That is normal and not something you
 did wrong.

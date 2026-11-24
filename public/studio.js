@@ -2,7 +2,7 @@
 // AI Edit Studio — Director 0.4 editor. One state model; the DOM is a view.
 import { EditHistory } from './edit-history.js';
 import { t, LANG, LOCALE, applyLanguage } from './i18n.js';
-import { parseSrt, mapCaptions } from './captions.js';
+import { parseSrt, parseVtt, mapCaptions } from './captions.js';
 import { applyOperations, coreClips, diffEdits, layout, totalDuration, clipAt, editPoints, unusedRanges, formatTime, LIMITS, newClipId, TRANSITIONS, COLOR_DEFAULTS } from './edit-ops.js';
 import { reviewEdit } from './insights.js';
 import { Timeline } from './timeline.js';
@@ -426,7 +426,8 @@ function renderReview() {
   const curves = state.curves;
   const srcs = sources().map((s, i) => ({ ...s, black: curves?.[i]?.black ?? [], scenes: curves?.[i]?.cuts ?? [] }));
   try {
-    state.review = reviewEdit({ clips: state.clips, sources: srcs, options: state.options, beats: currentBeats(), analyzed: Boolean(curves), curves: curves ?? undefined });
+    state.review = reviewEdit({ clips: state.clips, sources: srcs, options: state.options, beats: currentBeats(), analyzed: Boolean(curves), curves: curves ?? undefined,
+      captionsDropped: Number(state.project?.captionsDropped) || 0, captionsDroppedSources: state.project?.captionsDroppedSources ?? [] });
   } catch (e) { console.warn(e); return; }
   const r = state.review;
   badge.hidden = false; badge.textContent = r.score; badge.className = `score-badge ${r.score >= 85 ? 'good' : r.score >= 65 ? 'mid' : 'bad'}`;
@@ -500,7 +501,7 @@ function renderCues() {
   const cues = state.options.captions ?? [];
   $('caption-count').textContent = t('{n} lines', { n: cues.length });
   const root = $('cue-list');
-  root.replaceChildren(...cues.slice(0, 300).map((c, i) => {
+  root.replaceChildren(...cues.slice(0, LIMITS.captions).map((c, i) => {
     const row = el('div', 'cue'); row.append(el('time', '', `${sources()[c.sourceIndex]?.name?.slice(0, 6) ?? '#'} ${formatTime(c.start, 1)}`));
     const input = el('input'); input.value = c.text; input.maxLength = 180; input.setAttribute('aria-label', t('Caption {n}', { n: i + 1 }));
     input.onchange = () => { const text = input.value.trim(); if (!text) return; const next = cues.map((x, j) => j === i ? { ...x, text } : x); setOption('captions', next, { commit: true }); renderTimeline(); };
@@ -1026,9 +1027,10 @@ function bindChrome() {
   $('caption-picker').onchange = async e => {
     const file = e.target.files[0]; if (!file) return;
     try {
-      if (file.size > 128 * 1024) throw new Error(t('SRT is too large (max. 128 KiB).'));
-      const i = Number($('caption-source').value), cues = parseSrt(await file.text(), i);
-      if (cues.some(c => c.end > sources()[i].duration + 0.05)) throw new Error(t('Use an SRT with the timing of this original source file.'));
+      if (file.size > 128 * 1024) throw new Error(t('The caption file is too large (max. 128 KiB).'));
+      const i = Number($('caption-source').value), text = await file.text();
+      const cues = /\.vtt$/i.test(file.name) ? parseVtt(text, i) : parseSrt(text, i);
+      if (cues.some(c => c.end > sources()[i].duration + 0.05)) throw new Error(t('Use an SRT or VTT with the timing of this original source file.'));
       edit([{ op: 'set_options', options: { captions: [...(state.options.captions ?? []).filter(c => c.sourceIndex !== i), ...cues] } }], t('{n} captions', { n: cues.length }));
       switchTab('right', 'text');
     } catch (err) { toast(err.message); } finally { e.target.value = ''; }

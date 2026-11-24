@@ -16,7 +16,7 @@ import { applyOperations, coreClips, diffEdits, EditError, LIMITS, layout } from
 import { analyzeMusicFile, timelineBeats } from './beats.mjs';
 import { reviewEdit, describeTimeline, curvesFor, highlights as findHighlights, hookScore } from '../public/insights.js';
 import { templateOptions } from './templates.mjs';
-import { parseSrt, parseSrtCues, parseVttCues } from '../public/captions.js';
+import { parseSrt, parseSrtCues, parseVtt, parseVttCues } from '../public/captions.js';
 import { buildAutoEdit, PLATFORMS } from './autoedit.mjs';
 import { transcribeFile, speechStatus, parseWhisperJson } from './transcribe.mjs';
 import { normalizeWords, wordsFromSegments, findFillers, wordRanges, findPauses, matchPhrase, wordsInEdit, captionsFromEdit, transcriptText } from '../public/transcript.js';
@@ -26,7 +26,7 @@ import { listBrands, saveBrand, getBrand, readBrandSnapshot, brandOptions, brand
 import { findClips } from './clips.mjs';
 import { fitDuration, searchProject, assembleFromScript, multicamPlan, exportTimeline } from './longform.mjs';
 import { syncSources } from './sync.mjs';
-import { sectionSpans } from '../public/edit-ops.js';
+import { sectionSpans, suggestSections, oneSectionPerShot } from '../public/edit-ops.js';
 import { qcFile } from './qc.mjs';
 import { compileStory, storySummary, renderGeneratedScene } from './story.mjs';
 import { composeToFile, styleList, MOODS, MUSIC_ENGINE_VERSION, providerStatus, saveProviderKey, providerPrompt, elevenLabsCompose } from './music/index.mjs';
@@ -87,6 +87,8 @@ export async function getProject(id) {
   try { record = await readJson(path.join(folder(id), 'project.json')); }
   catch { throw new StudioError('PROJECT_NOT_FOUND', 'Project not found.'); }
   if (record.id !== id || record.schemaVersion !== 2) throw new StudioError('PROJECT_INVALID', 'Invalid project file.');
+  // A project saved with two sections on one shot (possible before #138) still opens: the last one wins.
+  if (Array.isArray(record.options?.sections)) record.options.sections = oneSectionPerShot(record.options.sections);
   record.options = normalizeOptions(record.options);
   // Plans saved before Director 0.4 have no stable clip ids; add them in memory.
   if (record.plan?.clips?.some(c => !c.id)) { try { record.plan = { ...record.plan, ...validateClips(record.plan.clips, record.sources), style: record.plan.style }; } catch { /* keep legacy plan untouched */ } }
@@ -520,10 +522,18 @@ export async function editProject(id, request = {}) {
   try { next = applyOperations(before, operations, { sources: sourceDurations(project), beats }); }
   catch (e) { if (e instanceof EditError) throw new StudioError(e.code, e.message); throw e; }
   // Captions that follow the transcript: rebuilt from the words that are still in the edit.
+  // transcriptCaptions() returns { captions, dropped }, not an array: passing the whole
+  // object on made every import / studio_edit fail with INVALID_CAPTIONS (#105).
+  let captionsLimit = { dropped: 0, sources: [] };
   if (next.options.autoCaptions) {
     const transcripts = await loadTranscripts(project);
-    if (Object.keys(transcripts).length) next = { ...next, options: { ...next.options, captions: transcriptCaptions(next.clips, next.options.captions ?? [], transcripts) } };
+    if (Object.keys(transcripts).length) {
+      const rebuilt = transcriptCaptions(next.clips, next.options.captions ?? [], transcripts);
+      captionsLimit = { dropped: rebuilt.dropped, sources: rebuilt.droppedSources };
+      next = { ...next, options: { ...next.options, captions: rebuilt.captions } };
+    }
   }
+  const captionsWarnings = captionsLimit.dropped ? [captionsLimitMessage(captionsLimit.dropped)] : [];
   // Re-check after async work: another client may have saved meanwhile.
   if (request.revision !== project.revision || active.has(project.status)) throw new StudioError('REVISION_CONFLICT', 'Project has changed in the meantime.');
   const options = await checkedOptions(next.options);
@@ -532,16 +542,20 @@ export async function editProject(id, request = {}) {
   plan.style = project.plan?.style ?? options.style;
   const after = { clips: coreClips(plan.clips), options };
   const diff = diffEdits(before, after);
-  const review = reviewEdit({ clips: plan.clips, sources: project.sources, options, beats: projectBeats(project) || beats, analyzed: project.sources.some(s => s.motion?.length) });
+  const review = reviewEdit({ clips: plan.clips, sources: project.sources, options, beats: projectBeats(project) || beats, analyzed: project.sources.some(s => s.motion?.length),
+    captionsDropped: captionsLimit.dropped, captionsDroppedSources: captionsLimit.sources });
   if (request.dryRun === true) {
-    return { dryRun: true, revision: project.revision, diff, review: { score: review.score, counts: review.counts },
+    return { dryRun: true, revision: project.revision, diff, ...(captionsWarnings.length ? { warnings: captionsWarnings } : {}),
+      review: { score: review.score, counts: review.counts },
       timeline: describeTimeline({ clips: plan.clips, sources: project.sources, options, beats }) };
   }
   if (request.revision !== project.revision || active.has(project.status)) throw new StudioError('REVISION_CONFLICT', 'Project has changed in the meantime or is being rendered.');
-  Object.assign(project, { options, plan, revision: project.revision + 1, status: 'draft', progress: 0, message: request.summary || diff.summary });
+  Object.assign(project, { options, plan, captionsDropped: captionsLimit.dropped, captionsDroppedSources: captionsLimit.sources,
+    revision: project.revision + 1, status: 'draft', progress: 0, message: request.summary || diff.summary });
   await recordRevision(project, before, { by: request.author, summary: request.summary });
   await persist(project);
-  return { project: publicProject(project), diff, review: { score: review.score, counts: review.counts, top: review.issues.slice(0, 5) } };
+  return { project: publicProject(project), ...(captionsWarnings.length ? { warnings: captionsWarnings } : {}),
+    diff, review: { score: review.score, counts: review.counts, top: review.issues.slice(0, 5) } };
 }
 
 /** Copy a project (sources, options, plan, history seed) into a new project without exports. */
@@ -624,7 +638,8 @@ export async function reviewProject(id) {
   const project = await getProject(id);
   if (!project.plan) throw new StudioError('PLAN_REQUIRED', 'Create an edit proposal first.');
   return { revision: project.revision, ...reviewEdit({ clips: project.plan.clips, sources: project.sources, options: project.options,
-    beats: projectBeats(project), analyzed: project.sources.some(s => s.motion?.length) }) };
+    beats: projectBeats(project), analyzed: project.sources.some(s => s.motion?.length),
+    captionsDropped: Number(project.captionsDropped) || 0, captionsDroppedSources: project.captionsDroppedSources ?? [] }) };
 }
 export async function timelineProject(id, request = {}) {
   const project = await getProject(id);
@@ -775,10 +790,10 @@ export async function importCaptionsFile(id, request = {}) {
   const project = await getProject(id);
   const index = Number(request.sourceIndex ?? 0);
   if (!project.sources[index]) throw new StudioError('INVALID_CAPTIONS', 'Unknown source index.');
-  const file = await checkedFile(String(request.file ?? ''), ['.srt', '.txt'], 2 * 1024 ** 2);
+  const file = await checkedFile(String(request.file ?? ''), ['.srt', '.vtt', '.txt'], 2 * 1024 ** 2);
   const text = await fs.readFile(file.file, 'utf8');
   let cues;
-  try { cues = parseSrt(text, index); } catch (e) { throw new StudioError('INVALID_CAPTIONS', e.message); }
+  try { cues = /\.vtt$/i.test(file.file) ? parseVtt(text, index) : parseSrt(text, index); } catch (e) { throw new StudioError('INVALID_CAPTIONS', e.message); }
   const offset = Number(request.offset ?? 0) || 0;
   if (offset) cues = cues.map(c => ({ ...c, start: Math.max(0, c.start + offset), end: Math.max(0.1, c.end + offset) }));
   const kept = request.replace === false ? (project.options.captions ?? []) : (project.options.captions ?? []).filter(c => c.sourceIndex !== index);
@@ -806,11 +821,17 @@ async function loadTranscripts(project) {
   }
   return out;
 }
+const captionsLimitMessage = dropped => `${dropped} caption(s) were not added: at most ${LIMITS.captions} lines.`;
 function transcriptCaptions(clips, existing, transcripts) {
   const covered = new Set(Object.keys(transcripts).map(Number));
   const kept = existing.filter(c => !covered.has(c.sourceIndex));
   const made = Object.entries(transcripts).flatMap(([index, t]) => captionsFromEdit(t.words, clips, Number(index)));
-  return [...kept, ...made].sort((a, b) => a.sourceIndex - b.sourceIndex || a.start - b.start).slice(0, 300);
+  const all = [...kept, ...made].sort((a, b) => a.sourceIndex - b.sourceIndex || a.start - b.start);
+  // Report the cut instead of hiding it: a 20-minute talk used to lose its last
+  // 14 minutes of captions here while the answer still said ok (#105).
+  const leftOut = all.slice(LIMITS.captions);
+  return { captions: all.slice(0, LIMITS.captions), dropped: leftOut.length,
+    droppedSources: [...new Set(leftOut.map(c => c.sourceIndex))] };
 }
 async function saveTranscript(project, index, result) {
   const source = project.sources[index];
@@ -824,10 +845,11 @@ async function saveTranscript(project, index, result) {
   return record;
 }
 function captionsRevision(project, transcripts, author) {
-  if (!project.plan) return false;
-  const captions = transcriptCaptions(project.plan.clips, project.options.captions ?? [], transcripts);
+  if (!project.plan) return null;
+  const { captions, dropped, droppedSources } = transcriptCaptions(project.plan.clips, project.options.captions ?? [], transcripts);
   project.options = { ...project.options, captions, autoCaptions: true };
-  return true;
+  project.captionsDropped = dropped; project.captionsDroppedSources = droppedSources;
+  return { dropped };
 }
 
 export async function speechInfo() { return speechStatus(); }
@@ -850,11 +872,13 @@ export async function transcribeProject(id, request = {}) {
       await saveTranscript(project, index, result);
     }
     const before = editState(project);
-    if (request.captions !== false && captionsRevision(project, await loadTranscripts(project))) {
+    const captions = request.captions !== false ? captionsRevision(project, await loadTranscripts(project)) : null;
+    if (captions) {
       project.revision++;
       await recordRevision(project, before, { by: request.author ?? 'engine', summary: 'Captions from transcript' });
     }
-    project.message = `Transcript ready (${indices.map(i => project.transcripts[i].words).reduce((a, b) => a + b, 0)} words). Edit by text in the Transcript tab.`;
+    project.message = `Transcript ready (${indices.map(i => project.transcripts[i].words).reduce((a, b) => a + b, 0)} words). Edit by text in the Transcript tab.`
+      + (captions?.dropped ? ` ${captionsLimitMessage(captions.dropped)}` : '');
   }, request.revision);
 }
 
@@ -891,7 +915,8 @@ export async function importTranscript(id, request = {}) {
     if (request.revision === undefined) throw new StudioError('INVALID_ARGUMENTS', 'captions:true needs the current revision.');
     edit = await editProject(id, { revision: request.revision, author: request.author, summary: 'Captions from imported transcript', operations: [{ op: 'set_options', options: { autoCaptions: true } }] });
   }
-  return { sourceIndex: index, words: record.words.length, engine: record.engine, wordTiming: record.wordTiming, ...(edit ? { project: edit.project } : {}) };
+  return { sourceIndex: index, words: record.words.length, engine: record.engine, wordTiming: record.wordTiming,
+    ...(edit?.warnings?.length ? { warnings: edit.warnings } : {}), ...(edit ? { project: edit.project } : {}) };
 }
 
 /** Read a transcript with in-edit flags; paged for long recordings. */
@@ -983,6 +1008,22 @@ export async function textEditProject(id, request = {}) {
   return { ...result, stats };
 }
 
+/**
+ * A list of clip ids that is not "all" must name shots that exist. Without this,
+ * reframe / auto-zoom / colour-match skipped unknown ids and answered `ok` with a
+ * reason that was not true ("Nothing to reframe", "No shots long enough"), while
+ * the id-based edit path already refuses them with CLIP_NOT_FOUND (#135). Ids
+ * change after a split or a new proposal, so an old id is a common mistake.
+ * The wording matches resolveIndex() in public/edit-ops.js.
+ */
+export function assertKnownClips(project, refs) {
+  if (!Array.isArray(refs)) return; // "all", omitted, and any legacy shape keep their old handling
+  const known = new Set(project.plan.clips.map(c => c.id));
+  for (const ref of refs) {
+    if (!known.has(ref)) throw new StudioError('CLIP_NOT_FOUND', `Clip id ${ref} does not exist (anymore).`);
+  }
+}
+
 /** Motion-following focus per clip for a target aspect (cached per shot). */
 async function computeReframe(project, { aspect = '9:16', clips: refs = 'all', follow = true } = {}) {
   const target = ASPECTS[aspect];
@@ -1012,6 +1053,7 @@ async function computeReframe(project, { aspect = '9:16', clips: refs = 'all', f
 export async function reframeProject(id, request = {}) {
   if (busy) throw new StudioError('ENGINE_BUSY', 'An analysis or render is running. Reframe after it has finished.');
   const project = await getProject(id);
+  assertKnownClips(project, request.clips);
   if (active.has(project.status)) throw new StudioError('PROJECT_BUSY', 'Wait until this production has finished.');
   if (request.revision !== project.revision) throw new StudioError('REVISION_CONFLICT', 'Project changed elsewhere. Fetch the current revision.');
   await validateSourceState(project);
@@ -1052,6 +1094,8 @@ export async function autoEditProject(id, request = {}) {
     } catch (e) { throw new StudioError('AUTO_EDIT_FAILED', e.message); }
     const before = editState(project);
     project.options = await checkedOptions(built.options);
+    project.captionsDropped = built.report.captionsDropped ?? 0;
+    project.captionsDroppedSources = built.report.captionsDroppedSources ?? [];
     if (request.brand) project.options = await checkedOptions({ ...project.options, ...brandOptions(await getBrand(request.brand)) });
     if (request.brief) project.options.brief = String(request.brief).slice(0, 2000);
     project.plan = validateClips(built.clips, project.sources); project.plan.style = project.options.style;
@@ -1233,8 +1277,12 @@ export async function freezeFrame(id, request = {}) {
   if (project.sources.length >= LIMITS.sources) throw new StudioError('TOO_MANY_SOURCES', `A project has at most ${LIMITS.sources} sources.`);
   const { layout: lay, clipAt } = await import('../public/edit-ops.js');
   const at = Number(request.at), seconds = Math.max(0.5, Math.min(10, Number(request.seconds) || 1.5));
+  const editEnd = lay(project.plan.clips).at(-1)?.timelineEnd ?? 0;
   const hit = clipAt(project.plan.clips, at);
-  if (!hit || !Number.isFinite(at)) throw new StudioError('INVALID_ARGUMENTS', 'at: a timeline time inside the edit.');
+  // clipAt() clamps to the last shot, so a late time would grab a frame that does not exist; the range is checked here (#132).
+  if (!hit || !Number.isFinite(at) || at >= editEnd) {
+    throw new StudioError('INVALID_ARGUMENTS', `at: a timeline time inside the edit (0–${Number(editEnd.toFixed(2))} s).`);
+  }
   const clip = project.plan.clips[hit.index], source = project.sources[clip.sourceIndex];
   if (source.still) throw new StudioError('INVALID_ARGUMENTS', 'This shot is already a still image.');
   await validateSourceState(project);
@@ -1244,7 +1292,6 @@ export async function freezeFrame(id, request = {}) {
   const stat = await fs.stat(file);
   project.sources.push({ ...info, file, size: stat.size, mtimeMs: stat.mtimeMs, name: `Freeze ${formatClock(at)}`, hasAudio: false, still: true, motion: [], audio: [], scenes: [], black: [] });
   const sourceIndex = project.sources.length - 1;
-  void lay;
   try {
     return await editProject(id, { revision: request.revision, author: request.author, summary: `Freeze frame at ${at.toFixed(2)} s (${seconds} s)`,
       operations: [{ op: 'insert', sourceIndex, start: 0, end: seconds, at, label: 'freeze', ...(request.zoomEnd ? { framing: 'fill', zoom: 1, zoomEnd: Math.min(1.4, Number(request.zoomEnd)) } : {}) }] });
@@ -1323,12 +1370,7 @@ export async function sectionsProject(id, request = {}) {
     const spans = sectionsOf(project);
     const out = { revision: project.revision, sections: spans.map(({ startIndex, endIndex, clipIds, ...x }) => ({ ...x, clips: clipIds.length, firstClip: clipIds[0] })) };
     if (action === 'suggest' || !spans.length) {
-      // Proposals: labelled markers, else every change of recording, else every ~2 minutes at a cut.
-      const rows = layout(project.plan?.clips ?? []), proposals = [];
-      for (const m of (project.options.markers ?? []).filter(m => m.label)) { const r = rows.find(x => x.visibleEnd > m.time); if (r && !proposals.some(p => p.clip === r.id)) proposals.push({ name: m.label, clip: r.id, at: Math.round(r.visibleStart * 10) / 10 }); }
-      if (!proposals.length) rows.forEach((r, i) => { if (!i || r.sourceIndex !== rows[i - 1].sourceIndex) proposals.push({ name: `Part ${proposals.length + 1} · ${project.sources[r.sourceIndex]?.name ?? ''}`.slice(0, 60), clip: r.id, at: Math.round(r.visibleStart * 10) / 10 }); });
-      if (proposals.length < 2) { let next = 0; for (const r of rows) if (r.visibleStart >= next) { proposals.push({ name: `Part ${proposals.length + 1}`, clip: r.id, at: Math.round(r.visibleStart * 10) / 10 }); next = r.visibleStart + 120; } }
-      out.suggestions = proposals.slice(0, 30);
+      out.suggestions = suggestSections(project.plan?.clips ?? [], { markers: project.options.markers ?? [], sources: project.sources });
     }
     return out;
   }
@@ -1613,6 +1655,7 @@ async function shotStats(source, start, end) {
 export async function colorMatchProject(id, request = {}) {
   const project = await getProject(id);
   if (!project.plan) throw new StudioError('PLAN_REQUIRED', 'Create an edit first.');
+  assertKnownClips(project, request.clips);
   await validateSourceState(project);
   const mode = request.mode ?? (request.reference ? 'match' : 'auto');
   if (!['auto', 'match'].includes(mode)) throw new StudioError('INVALID_ARGUMENTS', 'mode: auto or match.');
@@ -1882,6 +1925,7 @@ export async function sfxProject(id, request = {}) {
 export async function autoZoomProject(id, request = {}) {
   const project = await getProject(id);
   if (!project.plan) throw new StudioError('PLAN_REQUIRED', 'Create an edit first.');
+  assertKnownClips(project, request.clips);
   const style = request.style ?? 'punch', amount = Math.max(1.03, Math.min(1.4, Number(request.amount ?? (style === 'punch' ? 1.15 : 1.1)))), focusY = Math.max(0, Math.min(1, Number(request.focusY ?? 0.4)));
   const clips = project.plan.clips, ids = request.clips === undefined || request.clips === 'all' ? clips.filter(c => !project.sources[c.sourceIndex]?.still).map(c => c.id) : request.clips;
   let operations, detail;
@@ -1962,24 +2006,45 @@ export async function storyApply(request = {}) {
     return publicBuild(build);
   }
   const c = compileStory(request.story);
+  // A story names files; check them before either path does anything, so a dry run fails where the build would (#106).
+  const footageFiles = await checkStoryFiles(c);
   if (request.dryRun) return { dryRun: true, ...storySummary(c), note: 'Nothing was rendered. Fix warnings, then run again without dryRun; poll the returned buildId with studio_apply {action:"status", buildId}.' };
   if ([...storyBuilds.values()].some(b => b.status === 'building')) throw new StudioError('ENGINE_BUSY', 'A story is already being built. Poll it with studio_apply {action:"status", buildId}.');
   const build = { id: randomUUID(), status: 'building', progress: 0, message: 'Starting', startedAt: new Date().toISOString() };
   storyBuilds.set(build.id, build);
   while (storyBuilds.size > 20) storyBuilds.delete(storyBuilds.keys().next().value);
-  runStoryBuild(build, c, request).then(result => { build.result = result; build.status = 'done'; build.progress = 1; build.message = 'Ready'; })
+  runStoryBuild(build, c, request, footageFiles).then(result => { build.result = result; build.status = 'done'; build.progress = 1; build.message = 'Ready'; })
     .catch(e => { build.status = 'failed'; build.error = { code: e.code ?? 'STORY_FAILED', message: e.message }; build.message = e.message; });
   return publicBuild(build);
 }
 
-async function runStoryBuild(build, c, request) {
+/**
+ * The files a story names, checked the way the build checks them: each footage file exists and is allowed, the
+ * source range fits the clip, and music.file exists. Returns the footage file per scene index.
+ */
+async function checkStoryFiles(c) {
+  const files = new Map();
+  for (const [i, scene] of c.scenes.entries()) {
+    if (scene.kind !== 'footage') continue;
+    const file = (await checkedFile(scene.source, MEDIA_EXTENSIONS, 20 * 1024 ** 3)).file;
+    const { duration } = await probeMedia(file);
+    const speed = scene.speed ?? 1, start = Math.max(0, scene.start - scene.transitionSeconds * speed);
+    const end = start + scene.clipSeconds * speed;
+    if (end > duration + 0.001) throw new StudioError('INVALID_STORY', `Scene ${scene.id}: ${path.basename(scene.source)} is ${Math.round(duration * 100) / 100} s long; the scene needs source time up to ${Math.round(end * 100) / 100} s.`);
+    files.set(i, file);
+  }
+  if (c.music.file) await checkedFile(c.music.file, ['.wav', '.mp3', '.ogg', '.m4a', '.flac'], 500 * 1024 ** 2);
+  return files;
+}
+
+async function runStoryBuild(build, c, request, footageFiles = new Map()) {
   await ensureDataRoot(2 * 1024 ** 3);
   const tools = findFfmpegTools(), dir = path.join(ROOT, 'story-cache');
   const files = [];
   let reused = 0;
   for (const [i, scene] of c.scenes.entries()) {
     build.message = `Scene ${i + 1}/${c.scenes.length}: ${scene.id}`; build.progress = i / (c.scenes.length + 2);
-    if (scene.kind === 'footage') { files.push((await checkedFile(scene.source, MEDIA_EXTENSIONS, 20 * 1024 ** 3)).file); continue; }
+    if (scene.kind === 'footage') { files.push(footageFiles.get(i) ?? (await checkedFile(scene.source, MEDIA_EXTENSIONS, 20 * 1024 ** 3)).file); continue; }
     if (scene.logo) scene.logo = (await checkedFile(scene.logo, ['.png', '.jpg', '.jpeg'], 16 * 1024 ** 2)).file;
     const r = await renderGeneratedScene(c, scene, dir, { ffmpeg: tools.ffmpeg });
     if (r.reused) reused++;

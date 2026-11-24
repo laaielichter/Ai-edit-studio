@@ -175,13 +175,74 @@ test('publish: chapters, drafts, hashtags and frame quality', () => {
   assert.equal(frameQuality(Buffer.alloc(160 * 90, 5)).mean, 5);
 });
 
-test('publish: hashtags preserve Japanese voiced kana', () => {
+test('publish: chapters use sections before markers or clip labels', () => {
+  const clips = [
+    { id: 'a', sourceIndex: 0, start: 0, end: 40 },
+    { id: 'b', sourceIndex: 0, start: 40, end: 80 },
+    { id: 'c', sourceIndex: 0, start: 80, end: 120 },
+  ];
+  const sections = [
+    { name: 'Setup', clip: 'a' },
+    { name: 'Build', clip: 'b' },
+    { name: 'Result', clip: 'c' },
+  ];
+  const expected = ['00:00 Setup', '00:40 Build', '01:20 Result'];
+
+  // Sections produce chapters even when the clips have no labels.
   assert.deepEqual(
-    hashtags('新しいアップデートが公開されました', 'ゲームの新しいステージ'),
-    ['新しいアップデートが公開されました', 'ゲームの新しいステージ']
+    chapters(clips, { sections }).map(c => c.line),
+    expected
   );
 
+  const labelledClips = clips.map((clip, i) => ({
+    ...clip,
+    label: `Clip ${i + 1}`,
+  }));
+  const markers = [
+    { time: 0, label: 'Marker A' },
+    { time: 40, label: 'Marker B' },
+    { time: 80, label: 'Marker C' },
+  ];
+
+  // Sections take precedence over both markers and clip labels.
+  assert.deepEqual(
+    chapters(labelledClips, { sections, markers }).map(c => c.line),
+    expected
+  );
+
+  // An empty sections list preserves the marker fallback.
+  assert.deepEqual(
+    chapters(labelledClips, { sections: [], markers }).map(c => c.line),
+    ['00:00 Marker A', '00:40 Marker B', '01:20 Marker C']
+  );
+
+  // Too few sections must not fall back to otherwise valid markers or labels.
+  assert.deepEqual(
+    chapters(labelledClips, { sections: sections.slice(0, 2), markers }),
+    []
+  );
+});
+
+test('publish: hashtags preserve Japanese voiced kana and are word-sized', () => {
+  // #88 kept the voiced marks; #92 also splits the clause into real words.
+  assert.deepEqual(
+    hashtags('新しいアップデートが公開されました', 'ゲームの新しいステージ'),
+    ['新しい', 'アップデート', '公開', 'ゲーム', 'ステージ']
+  );
   assert.deepEqual(hashtags('アップデート'), ['アップデート']);
+  const ja = hashtags('ゲームの新しいステージ');
+  assert.deepEqual(ja, ['ゲーム', '新しい', 'ステージ']);
+  assert.ok(ja.every(tag => !/[\u0300-\u036f\u3099\u309a]/.test(tag)), 'no decomposed voiced marks in the tags');
+  assert.ok(!ja.some(tag => /[がのをは]/.test(tag)), 'particles do not become tags');
+});
+
+test('publish: Chinese hashtags are words, not clauses', () => {
+  const tags = hashtags('今天我们来做一个游戏', '这是我们的新关卡预告片，欢迎大家观看');
+  assert.ok(tags.includes('游戏') && tags.includes('预告片'), `topic words are missing: ${tags.join(', ')}`);
+  assert.ok(tags.every(tag => [...tag].length <= 3 && !/[，。！？]/.test(tag)), `a clause leaked through: ${tags.join(', ')}`);
+  assert.ok(tags.length > 0 && tags.length <= 5);
+  // A short CJK word is a real tag even though it is shorter than the 4-character Latin threshold.
+  assert.deepEqual(hashtags('新作 trailer 公開'), ['新作', 'trailer', '公開']);
 });
 
 test('publish: hashtags still fold Latin accents', () => {
@@ -219,6 +280,9 @@ test('publish: hashtags preserve English and Dutch examples', () => {
     hashtags('Deze video gaat over onze nieuwe Apache helikopter met laser'),
     ['video', 'gaat', 'apache', 'helikopter', 'laser']
   );
+  // The CJK branch must not change how Latin runs are split or capped (#92).
+  assert.deepEqual(hashtags('AH-64 Apache laser guided missiles', 'Our helicopter game'), ['apache', 'laser', 'guided', 'missiles', 'helicopter']);
+  assert.deepEqual(hashtags('  lots   of-spaces_and.mixed  abcd  xy  '), ['lots', 'spaces', 'mixed', 'abcd']);
 });
 
 test('publish: a long brief is shortened so the call to action and the hashtags still fit', () => {
@@ -259,6 +323,32 @@ test('publish drafts deduplicate hashtags before applying each platform limit', 
   const x = metadataDrafts({ title: 'T', tags: ['GameDev', 'gamedev', 'Indie'], platforms: ['x'] }).x;
   assert.deepEqual(x.hashtags, ['#GameDev', '#Indie']);
 });
+
+test('publish: YouTube and Shorts drafts strip angle brackets from title and description', () => {
+  const d = metadataDrafts({
+    title: 'Boss fight <3 > everything',
+    brief: 'New level <beta> is out',
+    cta: 'Play > now',
+    chapterList: [{ line: '00:00 Intro <3' }, { line: '00:20 Fight > all' }, { line: '00:40 End' }],
+    platforms: ['youtube', 'shorts', 'tiktok', 'x']
+  });
+  // YouTube and Shorts should have no < or > in title or description
+  assert.ok(!d.youtube.title.includes('<') && !d.youtube.title.includes('>'), 'youtube title has angle brackets');
+  assert.ok(!d.youtube.description.includes('<') && !d.youtube.description.includes('>'), 'youtube description has angle brackets');
+  assert.ok(!d.shorts.title.includes('<') && !d.shorts.title.includes('>'), 'shorts title has angle brackets');
+  assert.ok(!d.shorts.description.includes('<') && !d.shorts.description.includes('>'), 'shorts description has angle brackets');
+  // The angle brackets should be replaced with look-alike characters
+  assert.ok(d.youtube.title.includes('‹') || d.youtube.title.includes('›'), 'youtube title should have replacement characters');
+  // Other platforms should be unchanged
+  assert.equal(d.tiktok.description.includes('<'), true, 'tiktok description should keep angle brackets');
+  assert.equal(d.x.description.includes('<'), true, 'x description should keep angle brackets');
+  assert.ok(d.youtube.description.includes('00:00 Intro ‹3\n00:20 Fight › all\n00:40 End'));
+  assert.ok(d.tiktok.description.includes('Play > now'));
+  // Description should still fit within limits
+  assert.ok(d.youtube.description.length <= 5000);
+  assert.ok(d.shorts.description.length <= 5000);
+});
+
 
 test('publish pack deduplicates brand and title hashtags before taking six', async t => {
   let tools; try { tools = findFfmpegTools(); } catch { return t.skip('FFmpeg not available'); }

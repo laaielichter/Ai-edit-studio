@@ -293,3 +293,77 @@ test('review: a hook text or end call-to-action on the timeline counts as openin
   assert.ok(!codes({ texts: [{ start: 9, end: 11.9, text: 'Follow', style: 'callout', position: 'high' }] }).includes('NO_TEXT'));
   assert.ok(codes({ texts: [{ start: 5, end: 6, text: 'Middle', style: 'title', position: 'center' }] }).includes('NO_TEXT'));
 });
+
+// #139: a text, marker or sound effect past the end is saved but never shown or
+// heard. The review must name each one and offer a fix studio_edit can apply.
+test('review: after-end texts, markers and sound effects are reported with working fixes', () => {
+  const src = analyzed();
+  const clips = validateClips([{ id: 'a', sourceIndex: 0, start: 20, end: 26 }, { id: 'b', sourceIndex: 0, start: 2, end: 8 }], src).clips;
+  const total = totalDuration(clips);
+  const review = options => reviewEdit({ clips, sources: src, options });
+  const codes = options => review(options).issues.map(i => i.code);
+
+  const after = [
+    { start: total + 2, end: total + 5, text: 'SUBSCRIBE', style: 'big', position: 'center' },
+  ];
+  const cutOff = { start: total - 2, end: total + 2, text: 'Watch now', style: 'callout', position: 'high' };
+  const markers = [{ time: total + 4, label: 'Chapter two', color: 'yellow' }];
+  const sfx = [{ time: total + 8, kind: 'hit', gain: 0.7 }, { time: 1, kind: 'whoosh', gain: 0.5 }];
+
+  // A text completely after the end must not hide NO_TEXT any more.
+  assert.ok(codes({ texts: after }).includes('NO_TEXT'), 'an after-end text no longer counts as end text');
+  assert.ok(codes({ texts: after }).includes('TEXT_AFTER_END'));
+  assert.ok(codes({ texts: [cutOff] }).includes('TEXT_CUT_OFF'));
+  assert.ok(codes({ markers }).includes('MARKER_AFTER_END'));
+  assert.ok(codes({ sfx }).includes('SFX_AFTER_END'));
+
+  const all = review({ texts: [...after, cutOff], markers, sfx });
+  const lateIssues = all.issues.filter(i => ['TEXT_AFTER_END', 'TEXT_CUT_OFF', 'MARKER_AFTER_END', 'SFX_AFTER_END'].includes(i.code));
+  assert.equal(lateIssues.length, 4, 'one note per kind, plus the cut-off text');
+  assert.ok(all.issues.some(i => i.code === 'TEXT_AFTER_END' && i.severity === 'warning'));
+  assert.ok(all.issues.some(i => i.code === 'MARKER_AFTER_END' && i.severity === 'tip'));
+  assert.ok(all.issues.some(i => i.code === 'SFX_AFTER_END' && i.severity === 'warning'));
+
+  // Each fix can be sent to studio_edit unchanged: review a project with just
+  // that one offending element, apply the fix from that review, and check it is
+  // gone. (Indices are positional, so a fix belongs to the review it came from.)
+  for (const [name, options] of [
+    ['TEXT_AFTER_END', { texts: after }],
+    ['TEXT_CUT_OFF', { texts: [cutOff] }],
+    ['MARKER_AFTER_END', { markers }],
+    ['SFX_AFTER_END', { sfx }],
+  ]) {
+    const issue = review(options).issues.find(i => i.code === name);
+    assert.ok(issue?.fix?.operations?.length, `${name} has a fix`);
+    const fixed = applyOperations({ clips, options }, issue.fix.operations, { sources: src });
+    assert.ok((fixed.options.texts ?? []).every(t => Number(t.start) < total && Number(t.end) <= total), `${name}: no text past the end after its fix`);
+    assert.ok((fixed.options.markers ?? []).every(m => Number(m.time) < total), `${name}: no marker past the end after its fix`);
+    assert.ok((fixed.options.sfx ?? []).every(s => Number(s.time) < total), `${name}: no effect past the end after its fix`);
+  }
+
+  // Nothing inside the edit produces a new note.
+  const inside = review({ texts: [{ start: 0.1, end: 1.8, text: 'Wait for it', style: 'big', position: 'center' }], markers: [{ time: 2, label: 'Intro', color: 'blue' }], sfx: [{ time: 3, kind: 'pop', gain: 0.5 }] });
+  assert.deepEqual(inside.issues.filter(i => ['TEXT_AFTER_END', 'TEXT_CUT_OFF', 'MARKER_AFTER_END', 'SFX_AFTER_END'].includes(i.code)), []);
+});
+
+// #139 review: a total with more than three decimals (normal after a speed
+// change, e.g. 10 s at 1.5x) must still be fixable in one pass. round(total)
+// rounded UP past the edit end, so applying the fix and re-reviewing reported
+// TEXT_CUT_OFF again and an agent looped on it. The fix end must be rounded
+// DOWN and must never itself lie past the end.
+test('TEXT_CUT_OFF fix clears a non-round total in one pass', () => {
+  const src = analyzed();
+  const clips = validateClips([{ id: 'a', sourceIndex: 0, start: 0, end: 10, speed: 1.5, gain: 1 }], src).clips;
+  const total = totalDuration(clips); // 6.6666...: round() would give 6.667 > total
+  assert.ok(Math.round(total * 1000) / 1000 > total, 'fixture really has a total that round() pushes past the end');
+  const cutOff = { start: total - 2, end: total + 2, text: 'Watch now', style: 'callout', position: 'high' };
+  const options = { texts: [cutOff] };
+  const review = opts => reviewEdit({ clips, sources: src, options: opts });
+  const issue = review(options).issues.find(i => i.code === 'TEXT_CUT_OFF');
+  assert.ok(issue?.fix?.operations?.length, 'a cut-off text has a fix');
+  const end = issue.fix.operations[0].end;
+  assert.ok(end <= total, `fix end ${end} must not exceed the ${total} s edit`);
+  const fixed = applyOperations({ clips, options }, issue.fix.operations, { sources: src });
+  assert.ok(!review({ texts: fixed.options.texts }).issues.some(i => i.code === 'TEXT_CUT_OFF'),
+    'applying the fix once must clear TEXT_CUT_OFF for a non-round total');
+});

@@ -4,7 +4,7 @@
 <p align="center"><b>Your footage. Your story. Your studio.</b><br>A local-first video editor for creators and their AI agents.</p>
 <p align="center"><a href="https://laaielichter.github.io/Ai-edit-studio/">Project website</a> · <a href="#install-and-start-windows-beta">Get started</a> · <a href="docs/INTEGRATIONS.md">Connect your agent</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 
-[![Project website](https://img.shields.io/badge/Project_website-Visit-ff603d?style=flat-square)](https://laaielichter.github.io/Ai-edit-studio/) [![CI](https://github.com/laaielichter/Ai-edit-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/laaielichter/Ai-edit-studio/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-202220?style=flat-square)](LICENSE)
+[![Project website](https://img.shields.io/badge/Project_website-Visit-ff603d?style=flat-square)](https://laaielichter.github.io/Ai-edit-studio/) [![CI](https://github.com/laaielichter/Ai-edit-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/laaielichter/Ai-edit-studio/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-202220?style=flat-square)](LICENSE) [![GitHub stars](https://img.shields.io/github/stars/laaielichter/Ai-edit-studio?style=social)](https://github.com/laaielichter/Ai-edit-studio/stargazers)
 
 <a href="https://laaielichter.github.io/Ai-edit-studio/"><img src="docs/site/assets/social-card.png" alt="AI Edit Studio — local-first editing for creators and their AI agents" width="1200"></a>
 
@@ -175,7 +175,10 @@ The server binds to `127.0.0.1:32146` only (`GAME_TRAILER_STUDIO_PORT` to change
 ## Made in the open
 
 Built and maintained by [laaielichter](https://github.com/laaielichter). Contributions and real-world feedback are welcome.
-If the studio is useful to you, a GitHub star is appreciated — always optional.
+
+If AI Edit Studio is useful to you, a ⭐ on [GitHub](https://github.com/laaielichter/Ai-edit-studio) helps other people find it.
+
+Thanks to everyone who has contributed: [@17302513901yh-lang](https://github.com/17302513901yh-lang), [@DaniLlano](https://github.com/DaniLlano), [@Daiyuanranfeng](https://github.com/Daiyuanranfeng), [@rahul05ranjan](https://github.com/rahul05ranjan), [@tnalbant](https://github.com/tnalbant), [@wized2](https://github.com/wized2), [@matiasad](https://github.com/matiasad), [@Aaqibhafeezkhan](https://github.com/Aaqibhafeezkhan), [@versha-singh](https://github.com/versha-singh), [@RealBhupesh](https://github.com/RealBhupesh), [@khizzcr7](https://github.com/khizzcr7) and [@enidchen0125](https://github.com/enidchen0125).
 
 ## Development
 
