@@ -24,7 +24,7 @@ const options = object({
   fadeIn: number(0, 3), fadeOut: number(0, 3), duckMusic: bool, reduceRumble: bool,
   sourceChannel: choice(['stereo', 'left', 'right', 'mono']), narration: string(), narrationStart: number(0, T), narrationTrimStart: number(0, S), narrationGain: number(0, 2),
   masterFormat: choice([...MASTER_FORMATS]), socialSize: choice([...SOCIAL_SIZES]), exportVertical: bool, exportShare: bool, exportSquare: bool, exportPortrait: bool,
-  captions: { type: 'array', items: caption, maxItems: 300 }, captionOffset: number(-30, 30),
+  captions: { type: 'array', items: caption, maxItems: LIMITS.captions }, captionOffset: number(-30, 30),
   captionStyle: choice(['box', 'bold', 'minimal']), captionPosition: choice(['low', 'middle', 'high']), musicTrimStart: number(0, 600),
   captionAnimation: choice(['none', 'karaoke', 'pop', 'highlight', 'words']), captionCase: choice(['normal', 'upper']),
   markers: { type: 'array', maxItems: 100, items: object({ time: number(0, T), label: string(60), color: choice(['yellow', 'red', 'green', 'blue']) }, ['time']) },
@@ -59,7 +59,7 @@ const operation = object({
   times: { type: 'array', maxItems: 2000, items: number(0, T) },
   options, time: number(0, T), color: choice(['yellow', 'red', 'green', 'blue']),
 }, ['op']);
-const OPERATION_GUIDE = {
+export const OPERATION_GUIDE = {
   split: '{op:"split", at:<timeline s>} or {op:"split", clip, sourceTime}',
   delete: '{op:"delete", clip} or {op:"delete", clips:[...]} — ripple delete, the timeline closes the gap',
   delete_range: '{op:"delete_range", from:<timeline s>, to:<timeline s>} — remove a span across clips',
@@ -80,7 +80,7 @@ const OPERATION_GUIDE = {
   speed_ramp: '{op:"speed_ramp", clip, from:1, to:0.5, steps:4} — stepped speed ramp (the shot is split into steps with interpolated speed)',
   add_overlay: '{op:"add_overlay", sourceIndex, start, end (SOURCE s), at (TIMELINE s), mode:"full"|"pip", position?:"top-right"|…, size?:0.32, gain?:0, fade?} — B-roll cutaway over the edit (main sound continues) or picture-in-picture',
   update_overlay: '{op:"update_overlay", index, ...fields}', remove_overlay: '{op:"remove_overlay", index}',
-  add_text: '{op:"add_text", start, end?, text, style?:"title"|"lower"|"big"|"note", position?:"center"|"low"|"high"|"left-low"|"left-high"} — on-screen text in TIMELINE seconds (title cards, lower thirds); not captions',
+  add_text: '{op:"add_text", start, end?, text, style?:"title"|"lower"|"big"|"note"|"callout", position?:"center"|"low"|"high"|"left-low"|"left-high"} — on-screen text in TIMELINE seconds (title cards, lower thirds); not captions',
   update_text: '{op:"update_text", index, ...fields}', remove_text: '{op:"remove_text", index}',
 };
 const spec = (name, description, inputSchema, readOnly = false) => ({ name: `studio_${name}`, description, inputSchema,
@@ -99,14 +99,14 @@ export const agentTools = [
   spec('create', 'Create a local project from absolute video paths, without copying or modifying originals. Optional template id from studio_schema. Set label/endTitle empty for non-game content.', object({ name: string(100), inputs: { type: 'array', items: string(), minItems: 1, maxItems: LIMITS.sources }, template: string(40), options }, ['name', 'inputs'])),
   spec('analyze', 'Start local scene/motion/audio analysis and replace the edit proposal. Returns immediately; poll get until ready/failed. Review the clips before export.', object({ projectId, revision }, ['projectId', 'revision'])),
   spec('plan', 'Replace edit proposal using current options and existing analysis. Does not render. finaleSeconds protects the continuous final shot.', object({ projectId, revision }, ['projectId', 'revision'])),
-  spec('edit', 'PREFERRED way to change an edit. Atomic batch of operations (split, delete, delete_range, move, move_block, swap, trim, trim_to, slip, insert, set, replace, beat_sync, set_options, add_marker, remove_marker) with revision guard. All-or-nothing; errors name the failing operation. dryRun:true returns diff, review score and resulting timeline without saving. Reference clips by id; ids survive reorders, indices do not.', object({ projectId, revision, operations: { type: 'array', items: operation, minItems: 1, maxItems: 100 }, dryRun: bool, summary, author: string(40) }, ['projectId', 'revision', 'operations'])),
+  spec('edit', 'PREFERRED way to change an edit. Atomic batch of operations with revision guard; see studio_schema for the complete supported operation list and argument guide. All-or-nothing; errors name the failing operation. dryRun:true returns diff, review score and resulting timeline without saving. Reference clips by id; ids survive reorders, indices do not.', object({ projectId, revision, operations: { type: 'array', items: operation, minItems: 1, maxItems: 100 }, dryRun: bool, summary, author: string(40) }, ['projectId', 'revision', 'operations'])),
   spec('silence', 'Read-only silence-cut proposal from analyzed RMS levels. Not speech/filler detection. Does not save. Listen before applying returned plan.clips with update; strip derived clip fields first.', object({ projectId, revision, thresholdDb: number(-70, -20), minSilence: number(1, 10) }, ['projectId', 'revision']), true),
   spec('update', 'Update project with revision guard. Options merge with saved options; clips replace the whole edit. Prefer studio_edit for targeted changes. Captions use original SOURCE time and follow trims, reorder and speed. Never guess speech.', object({ projectId, revision, options, clips: { type: 'array', items: clip, minItems: 1, maxItems: LIMITS.clips }, summary, author: string(40) }, ['projectId', 'revision'])),
   spec('history', 'Revision history with author (editor/agent/engine) and summaries. Read only.', object({ projectId }, ['projectId']), true),
   spec('diff', 'What changed between two revisions (defaults: previous vs current): clips added/removed/changed/moved and option keys.', object({ projectId, from: revision, to: revision }, ['projectId']), true),
   spec('restore', 'Non-destructive undo: creates a NEW revision equal to an earlier one. Nothing is deleted.', object({ projectId, revision, toRevision: revision, author: string(40) }, ['projectId', 'revision', 'toRevision'])),
   spec('style', 'Named styles shared by editor and agents (look, brand, mix, captions, export choices). action "list" (read), "save" (from a projectId or explicit options), "apply" (revision guarded; creates a revision).', object({ action: choice(['list', 'save', 'apply']), name: string(60), projectId, revision, options, author: string(40) }, ['action'])),
-  spec('captions_import', 'Import a local SRT file as SOURCE-timed captions for one source (revision guarded). Optional offset in seconds; replace:false keeps existing captions of that source.', object({ projectId, revision, sourceIndex: SRC, file: string(), offset: number(-600, 600), replace: bool, author: string(40) }, ['projectId', 'revision', 'file'])),
+  spec('captions_import', 'Import a local SRT or WebVTT file as SOURCE-timed captions for one source (revision guarded). Optional offset in seconds; replace:false keeps existing captions of that source.', object({ projectId, revision, sourceIndex: SRC, file: string(), offset: number(-600, 600), replace: bool, author: string(40) }, ['projectId', 'revision', 'file'])),
   spec('doctor', 'Runtime health: FFmpeg/ffprobe versions, encoder (NVENC/libx264), storage and data root. Read only.', object({}), true),
   spec('duplicate', 'Copy a project (sources, options, edit, history seed) into a new project without exports — for A/B versions, a vertical cut next to the master, or a safe sandbox.', object({ projectId, name: string(100), author: string(40) }, ['projectId'])),
   spec('auto_edit', 'DIRECTOR MODE — one call from raw footage to a finished edit. Analyzes if needed, removes black/dead stretches, picks the strongest moments (or keeps nearly everything with keep:"most"), tries 3 opening hooks and keeps the best, adds transitions, beat-syncs to music, makes captions from a transcript, auto-fixes review issues, reframes for vertical, and optionally renders all platform formats. Asynchronous: poll studio_get; project.autoEdit holds the report. Every step is a normal revision (undo with studio_restore).',
@@ -229,6 +229,13 @@ export function openAiTools(style = 'responses') {
     : { type: 'function', name, description, parameters: inputSchema, strict: false });
 }
 
+const schemaDiagnostic = (item, max = 16) => {
+  if (typeof item === 'string') return JSON.stringify(item.slice(0, max)) + (item.length > max ? '…' : '');
+  if (typeof item === 'number') return Number.isFinite(item) ? JSON.stringify(item) : String(item);
+  if (typeof item === 'boolean' || item === null) return JSON.stringify(item);
+  return '[non-scalar schema value]';
+};
+
 export function validateArguments(value, schema, location = 'arguments') {
   const fail = message => { throw new StudioError('INVALID_ARGUMENTS', `${location}: ${message}`); };
   if (schema.anyOf) {
@@ -247,12 +254,21 @@ export function validateArguments(value, schema, location = 'arguments') {
     if (!Array.isArray(value) || value.length < (schema.minItems ?? 0) || value.length > (schema.maxItems ?? Infinity)) fail('invalid array size');
     value.forEach((v, i) => validateArguments(v, schema.items, `${location}[${i}]`));
   } else if (schema.type === 'number' || schema.type === 'integer') {
-    if (!Number.isFinite(value) || (schema.type === 'integer' && !Number.isInteger(value)) || value < (schema.minimum ?? -Infinity) || value > (schema.maximum ?? Infinity)) fail('invalid numeric value');
+    if (!Number.isFinite(value) || (schema.type === 'integer' && !Number.isInteger(value)) || value < (schema.minimum ?? -Infinity) || value > (schema.maximum ?? Infinity)) {
+      const bounds = [
+        schema.minimum == null ? '' : ` >= ${schemaDiagnostic(schema.minimum)}`,
+        schema.maximum == null ? '' : ` <= ${schemaDiagnostic(schema.maximum)}`,
+      ].join('');
+      fail(`invalid numeric value; expected finite ${schema.type}${bounds}; received type ${typeof value}`);
+    }
   } else if (schema.type === 'null') { if (value !== null) fail('expected null'); }
   else if (typeof value !== schema.type) fail(`expected ${schema.type}`);
-  if (schema.enum && !schema.enum.includes(value)) fail('unsupported choice');
-  if (schema.maxLength && value.length > schema.maxLength) fail('text too long');
-  if (schema.pattern && !new RegExp(schema.pattern).test(value)) fail('invalid identifier');
+  if (schema.enum && !schema.enum.includes(value)) {
+    const choices = schema.enum.slice(0, 32).map(item => schemaDiagnostic(item)).join(', ');
+    fail(`unsupported choice; allowed choices: ${choices}${schema.enum.length > 32 ? ', … (see schema)' : ''}`);
+  }
+  if (schema.maxLength && value.length > schema.maxLength) fail(`text too long; maximum ${schemaDiagnostic(schema.maxLength)} UTF-16 code units; actual UTF-16 length ${typeof value === 'string' ? value.length : 'unavailable'}`);
+  if (schema.pattern && !new RegExp(schema.pattern).test(value)) fail(`invalid identifier; expected pattern ${schemaDiagnostic(schema.pattern, 64)}`);
 }
 
 const storyGuide = topic => { if (topic === undefined || topic === 'story') return STORY_GUIDE; throw new StudioError('INVALID_ARGUMENTS', 'topic must be "story".'); };
@@ -451,9 +467,36 @@ function flagArguments(tool, flags) {
   return args;
 }
 
+const toolName = command => String(command ?? '').trim().toLowerCase().replace(/-/g, '_');
+
+function editDistance(a, b) {
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(previous[j] + 1, row[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    previous = row;
+  }
+  return previous[b.length];
+}
+
+function unknownToolError(command) {
+  const typed = toolName(command);
+  const names = agentTools.map(t => t.name.replace(/^studio_/, ''));
+  let close = null;
+  let best = 3;
+  for (const name of names) {
+    const distance = editDistance(typed, name);
+    if (distance < best) { best = distance; close = name; }
+  }
+  const hint = close ? ` Did you mean ${close}?` : '';
+  return new StudioError('UNKNOWN_TOOL', `Unknown tool: studio_${typed}.${hint} Tools: ${names.join(', ')}.`);
+}
+
 export function studioHelp(command) {
-  const tool = agentTools.find(t => t.name === `studio_${command}`);
-  if (!tool) throw new StudioError('UNKNOWN_TOOL', `Unknown tool: studio_${command}. Tools: ${agentTools.map(t => t.name.replace(/^studio_/, '')).join(', ')}.`);
+  const tool = agentTools.find(t => t.name === `studio_${toolName(command)}`);
+  if (!tool) throw unknownToolError(command);
   const { properties = {}, required = [] } = tool.inputSchema;
   const lines = [`${tool.name}: ${tool.description}`, '', `Usage: node cli.mjs studio ${command} [flags]`, '', 'Flags:'];
   for (const [name, schema] of Object.entries(properties)) {
@@ -467,15 +510,27 @@ export function studioHelp(command) {
 export async function runStudioCommand(command, flags, api) {
   let args = {};
   if (flags.request) {
-    const content = flags.request === '-' ? await readStdin() : await fs.readFile(String(flags.request), 'utf8');
+    let content;
+    if (flags.request === '-') {
+      content = await readStdin();
+    } else {
+      const file = String(flags.request);
+      try {
+        content = await fs.readFile(file, 'utf8');
+      } catch (error) {
+        if (error?.code === 'ENOENT') throw new StudioError('FILE_NOT_FOUND', `File not found: ${file}`);
+        if (error?.code === 'EISDIR') throw new StudioError('INVALID_ARGUMENTS', `--request must be a file, got a folder: ${file}`);
+        throw error;
+      }
+    }
     if (content.length > 12 * 1024 * 1024) throw new StudioError('REQUEST_TOO_LARGE', 'Request exceeds 12 MiB.');
     try { args = JSON.parse(content.replace(/^\uFEFF/, '')); } catch { throw new StudioError('INVALID_JSON', 'Request must be a JSON object.'); }
     if (args === null || typeof args !== 'object' || Array.isArray(args)) throw new StudioError('INVALID_JSON', 'Request must be a JSON object.');
   }
-  const tool = agentTools.find(t => t.name === `studio_${command}`);
-  if (!tool) throw new StudioError('UNKNOWN_TOOL', `Unknown tool: studio_${command}`);
+  const tool = agentTools.find(t => t.name === `studio_${toolName(command)}`);
+  if (!tool) throw unknownToolError(command);
   Object.assign(args, flagArguments(tool, flags));
-  let result = await callAgentTool(`studio_${command}`, args, api);
+  let result = await callAgentTool(tool.name, args, api);
   for (const key of ['frame', 'storyboard']) if (result[key]?.imageBase64) { const { imageBase64, ...rest } = result[key]; result = { ...result, [key]: rest }; }
   if (flags.wait === true || flags.wait === 'true') {
     const deadline = Date.now() + 30 * 60_000;

@@ -7,7 +7,7 @@ description: Cut a long video (podcast, stream, interview, webinar, vlog, lectur
 
 ## Steps
 
-1. `studio_create {name, inputs:["<long video>"], options:{label:"", endTitle:""}}` → `studio_analyze` →
+1. `studio_create {name, inputs:["<long video>"]}` → `studio_analyze` →
    `studio_wait {until:"idle"}`.
 2. Speech makes clips self-contained: `studio_transcribe {projectId, language:"auto"}` → wait. Without a local engine,
    import a transcript (`studio_transcript {action:"import", file}`) or continue without — clips then cut on scene/quiet

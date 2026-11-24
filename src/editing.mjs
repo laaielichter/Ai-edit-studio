@@ -102,8 +102,13 @@ export function normalizeOptions(value = {}) {
     masterFormat, socialSize, exportVertical: value.exportVertical ?? true, exportShare: value.exportShare ?? true,
     exportSquare: value.exportSquare ?? false, exportPortrait: value.exportPortrait ?? false,
     title: text(value.title, 100),
-    label: text(value.label ?? 'PRE-ALPHA FOOTAGE', 70),
-    endTitle: text(value.endTitle ?? 'IN DEVELOPMENT', 100),
+    // A project that is not made from the game-trailer template has no stamp:
+    // the old defaults ("PRE-ALPHA FOOTAGE" / "IN DEVELOPMENT") were leftovers
+    // of the game-trailer origin and ended up baked into holiday clips and used
+    // as the call to action of publish drafts (#104). Templates and explicit
+    // values still set their own text, and existing projects keep what they stored.
+    label: text(value.label ?? '', 70),
+    endTitle: text(value.endTitle ?? '', 100),
     style,
     duration: bounded(value.duration, 30, 5, LIMITS.editSeconds, 'Duration'),
     trimStart: bounded(value.trimStart, 0, 0, 600, 'Skip start'),
@@ -133,9 +138,20 @@ export function validateOverlaySources(overlays = [], sources) {
   });
 }
 export function validateCaptionSources(captions, sources) {
-  for (const cue of captions) if (!sources[cue.sourceIndex] || cue.end > sources[cue.sourceIndex].duration + 0.05) {
-    throw new StudioError('INVALID_CAPTIONS', 'Caption points outside the selected source. Use the SRT of the original source file.');
-  }
+  const hint = 'Use the SRT of the original source file.';
+  captions.forEach((cue, i) => {
+    const source = sources[cue.sourceIndex];
+    if (!source) {
+      const n = sources.length;
+      throw new StudioError('INVALID_CAPTIONS', `Caption ${i + 1} points to source ${cue.sourceIndex}; this project has ${n} source${n === 1 ? '' : 's'}.`);
+    }
+    if (cue.end > source.duration + 0.05) {
+      const raw = String(cue.text ?? '');
+      const text = raw.slice(0, 40) + (raw.length > 40 ? '…' : '');
+      const label = source.name ? ` (${source.name})` : '';
+      throw new StudioError('INVALID_CAPTIONS', `Caption ${i + 1} ("${text}") ends at ${Number(cue.end).toFixed(1)} s, but source ${cue.sourceIndex}${label} is ${Number(source.duration).toFixed(1)} s long. ${hint}`);
+    }
+  });
 }
 
 /** Only indices of already registered media are accepted, never arbitrary paths. */

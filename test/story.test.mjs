@@ -30,6 +30,41 @@ test('timing: beats × (60 / bpm), transition overlaps the previous scene and en
   assert.equal(c.duration, 4);
 });
 
+test('a story with an unknown music style, mood or seed is refused before building', () => {
+  const good = { bpm: 96, style: 'lofi', mood: 'chill', seed: 42 };
+  const c = compileStory(base({ music: good }));
+  assert.equal(c.music.style, 'lofi');
+  assert.equal(c.music.mood, 'chill');
+  assert.equal(c.music.seed, 42);
+  assert.equal(compileStory(base()).music.style, undefined, 'a missing style still means no music');
+  assert.equal(compileStory(base({ music: { bpm: 96, style: 'pop' } })).music.mood, undefined);
+  for (const seed of [0, 1, 42, 2147483647]) {
+    const ok = compileStory(base({ music: { ...good, seed } }));
+    assert.equal(ok.music.seed, seed, `an integer seed ${seed} is accepted`);
+    assert.equal(typeof ok.music.seed, 'number', 'the compiled seed stays a number');
+  }
+  const bad = [
+    ['style', 'polka', /music.style must be one of pop, trap, house, lofi, synthwave, cinematic/],
+    ['mood', 'angry', /music.mood must be one of uplifting, emotional, epic, dark, chill, dreamy/],
+    ['seed', 'x', /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', '42', /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', 1.5, /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', true, /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', '', /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', [], /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', null, /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', -1, /music.seed must be an integer from 0 to 2147483647/],
+    ['seed', 2 ** 31, /music.seed must be an integer from 0 to 2147483647/],
+  ];
+  for (const [field, value, re] of bad) {
+    assert.throws(() => compileStory(base({ music: { ...good, [field]: value } })), (err) => {
+      assert.equal(err.code, 'INVALID_STORY');
+      assert.match(err.message, re);
+      return true;
+    }, `${field}=${value}`);
+  }
+});
+
 test('mistakes are refused or warned in plain words', () => {
   assert.throws(() => compileStory({ scenes: [] }), /scenes/);
   assert.throws(() => compileStory({ scenes: [scene('a'), scene('a')] }), /used twice/);
@@ -40,6 +75,28 @@ test('mistakes are refused or warned in plain words', () => {
   const fast = compileStory({ music: { bpm: 120 }, scenes: [scene('a', { beats: 1, lines: ['One two three four five six seven'] })] });
   assert.ok(fast.warnings.some(w => w.code === 'READ_TIME'));
   assert.ok(readSeconds('one two') > 0.8);
+});
+
+test('a key the story format does not know is a warning with the nearest name (#106)', () => {
+  const c = compileStory(base({
+    bpm: 90,
+    music: { bpm: 140 },
+    muisc: { bpm: 140 },
+    style: { accent: '#8db4ee', accnt: '#f0b544' },
+    scenes: [scene('a', { lnes: ['Typo line'] })],
+    drops: [],
+    sfx: [],
+  }));
+  const messages = c.warnings.filter(w => w.code === 'UNKNOWN_KEY').map(w => w.message).sort();
+  assert.deepEqual(messages, [
+    'Scene a: unknown key "lnes"; did you mean lines?',
+    'story: unknown key "bpm"; did you mean music.bpm?',
+    'story: unknown key "muisc"; did you mean music?',
+    'style: unknown key "accnt"; did you mean accent?',
+  ]);
+  assert.equal(c.bpm, 140, 'the tempo comes from music.bpm; the top-level one is ignored, which the warning says');
+  assert.deepEqual(compileStory(base()).warnings.filter(w => w.code === 'UNKNOWN_KEY'), [],
+    'every key of the guide example is known');
 });
 
 test('studio_guide and studio_apply dryRun work without a running server', async () => {

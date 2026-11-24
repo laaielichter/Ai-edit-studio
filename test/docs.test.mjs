@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { agentTools, STUDIO_VERSION } from '../src/agent-tools.mjs';
+import { agentTools, OPERATIONS, OPERATION_GUIDE, STUDIO_VERSION } from '../src/agent-tools.mjs';
+import { TEXT_STYLES } from '../public/edit-ops.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFile(path.join(ROOT, file), 'utf8');
@@ -43,4 +44,14 @@ test('README and editor version labels match the engine major and minor version'
   const editorVersion = editor.match(/DIRECTOR\s+(\d+\.\d+)/)?.[1];
   assert.equal(readmeVersion, expected, 'README.md heading');
   assert.equal(editorVersion, expected, 'public/index.html brand label');
+});
+
+test('studio_edit points to the complete operation guide', () => {
+  const edit = agentTools.find(tool => tool.name === 'studio_edit');
+  assert.ok(edit, 'studio_edit tool exists');
+  assert.match(edit.description, /studio_schema/);
+  assert.deepEqual(Object.keys(OPERATION_GUIDE).sort(), [...OPERATIONS].sort());
+  for (const style of Object.keys(TEXT_STYLES)) {
+    assert.ok(OPERATION_GUIDE.add_text.includes(`"${style}"`), 'add_text guide is missing style ' + style);
+  }
 });

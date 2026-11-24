@@ -19,7 +19,7 @@ by looking at frames and the storyboard before anything is called finished. Neve
 ## 1. Create and auto-edit (Director mode)
 
 ```text
-studio_create {name, inputs:[...], options:{label:"", endTitle:""}}         → projectId
+studio_create {name, inputs:[...]}                                        → projectId
 studio_auto_edit {projectId, platform:"tiktok", pace:"punchy", keep:"highlights",
                   hookText:"<promise in ≤ 6 words, CAPS ok>", cta:"<cta>", variants:true,
                   brand?:"<kit>", preview:true, queue:true}

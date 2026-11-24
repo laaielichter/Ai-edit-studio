@@ -157,6 +157,8 @@ and can make A/B projects with the other hooks (`variants:true`). Every step is 
 1. `studio_schema` → limits, operations, templates.
 2. `studio_create` (optional `template`: `shorts-hook`, `game-trailer`, `youtube-teaser`, `devlog`, `cinematic`, `square-post`)
    → `studio_analyze` → poll `studio_get` until `status` is `ready`.
+   A project made without a template has no `label` (top-right stamp) and no `endTitle` (end card / publish call to action);
+   only the `game-trailer` template sets `PRE-ALPHA FOOTAGE`. Pass `label` / `cta` explicitly if you want one.
 3. **See** the edit: `studio_timeline` (text) + `studio_storyboard` (one JPEG) + `studio_frame` for details.
 4. **Find** material: `studio_highlights`; **music**: `studio_beats`.
 5. **Change** with `studio_edit` — atomic batch, `dryRun: true` first when unsure:
@@ -188,7 +190,7 @@ and can make A/B projects with the other hooks (`variants:true`). Every step is 
    `square720`, `square`, `square1440`; 4:5 `portrait720`, `portrait`, `portrait1440`; `whatsapp` (720p, ≤ 16 MiB).
 8. Need a variant? `studio_duplicate` gives a sandbox or a vertical cut next to the master.
 9. Reuse a look: `studio_style {action:"save", name, projectId}` / `{action:"apply", name, projectId, revision}` / `{action:"list"}` —
-   the same named styles the editor shows. Captions from disk: `studio_captions_import {projectId, revision, file, sourceIndex}`.
+   the same named styles the editor shows. Captions from disk: `studio_captions_import {projectId, revision, file, sourceIndex}`, an SRT or a WebVTT file.
    Runtime check: `studio_doctor`. Detail frames: `studio_frame {…, size:"large"}` (1920 px).
 
 ## Rules the engine enforces (so you don't have to guess)

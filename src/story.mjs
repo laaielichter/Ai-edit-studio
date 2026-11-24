@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { StudioError } from './paths.mjs';
 import { runProcess } from './process.mjs';
+import { STYLES, MOODS } from './music/compose.mjs';
 
 export const STORY_VERSION = 'aes.story/1';
 export const STORY_ENGINE_VERSION = 1;
@@ -247,6 +248,91 @@ function resolveTime(ref, events, beat, where) {
   return fail(`${where}: give beat, event or at.`);
 }
 
+// --------------------------------------------------------------------------------------------- unknown keys
+/**
+ * Keys every story object may carry. A key outside these lists is dropped without a word today, which is how
+ * a top-level `bpm` builds a story at 120 BPM instead of the tempo that was asked for (#106).
+ */
+const STORY_KEYS = ['version', 'name', 'deliver', 'size', 'safeArea', 'fps', 'music', 'style', 'scenes', 'texts', 'sfx', 'drops'];
+const MUSIC_KEYS = ['bpm', 'style', 'mood', 'seed', 'file', 'gain', 'ending'];
+const STYLE_KEYS = ['accent', 'accent2', 'ink', 'muted', 'panel', 'background', 'font', 'fontBody', 'fontMono', 'fontsDir', 'grain', 'grid', 'glow'];
+const SCENE_BASE = ['id', 'kind', 'beats', 'label', 'transition', 'transitionSeconds', 'text'];
+const SCENE_KIND_KEYS = {
+  footage: ['source', 'start', 'end', 'framing', 'zoom', 'zoomEnd', 'focusX', 'focusY', 'focusXEnd', 'focusYEnd', 'brightness', 'contrast', 'saturation', 'temperature', 'gain', 'sharpen'],
+  title: ['lines', 'sub', 'stagger', 'subBeat', 'align', 'size'],
+  counter: ['to', 'from', 'decimals', 'prefix', 'suffix', 'title', 'sub', 'sourceNote', 'countBeats', 'subBeat', 'locale'],
+  bars: ['title', 'items', 'max', 'highlight', 'decimals', 'prefix', 'suffix', 'sourceNote', 'locale'],
+  terminal: ['title', 'window', 'command', 'output', 'note'],
+  chips: ['title', 'items', 'footer', 'footerBeat'],
+  'card/end': ['title', 'tagline', 'cta', 'url', 'logo'],
+};
+const TIME_KEYS = ['beat', 'event', 'at', 'offset'];
+const SFX_KEYS = ['kind', ...TIME_KEYS, 'gain'];
+const TEXT_KEYS = ['text', 'style', 'position', 'at', 'until', 'beats'];
+
+/** Levenshtein distance, enough to name the key a typo was meant to be. */
+function keyDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** The allowed key closest to a typo, or undefined when nothing is close. */
+function nearestKey(key, allowed) {
+  const target = key.toLowerCase();
+  const limit = Math.max(2, Math.floor(target.length / 3));
+  let best, bestDistance = limit + 1;
+  for (const candidate of allowed) {
+    const d = keyDistance(target, candidate.toLowerCase());
+    if (d < bestDistance) { bestDistance = d; best = candidate; }
+  }
+  return bestDistance <= limit ? best : null;
+}
+
+/** Warn about keys this object does not take, naming the nearest one; `music.bpm` for a top-level `bpm`. */
+function unknownKeys(object, allowed, where, warnings) {
+  if (!isObj(object)) return;
+  for (const key of Object.keys(object)) {
+    if (allowed.includes(key)) continue;
+    // A key that belongs to a nested object is named with its path ("music.bpm"), before any near miss here.
+    let hint = null;
+    for (const [path, keys] of [['music', MUSIC_KEYS], ['style', STYLE_KEYS]]) if (keys.includes(key)) { hint = `${path}.${key}`; break; }
+    if (!hint) hint = nearestKey(key, allowed);
+    warnings.push({ code: 'UNKNOWN_KEY', message: `${where}: unknown key "${key}"${hint ? `; did you mean ${hint}?` : ''}` });
+  }
+}
+
+/** One pass over the raw story: the keys of each object it carries, so a typo is named instead of ignored. */
+function unknownStoryKeys(story) {
+  const warnings = [];
+  unknownKeys(story, STORY_KEYS, 'story', warnings);
+  unknownKeys(story.music, MUSIC_KEYS, 'music', warnings);
+  unknownKeys(story.style, STYLE_KEYS, 'style', warnings);
+  if (isObj(story.style?.background)) unknownKeys(story.style.background, ['from', 'to'], 'style.background', warnings);
+  for (const [i, scene] of (Array.isArray(story.scenes) ? story.scenes : []).entries()) {
+    if (!isObj(scene)) continue;
+    const kind = scene.source !== undefined ? 'footage' : scene.kind;
+    const where = `Scene ${scene.id ?? i + 1}`;
+    unknownKeys(scene, [...SCENE_BASE, ...(SCENE_KIND_KEYS[kind] ?? [])], where, warnings);
+    unknownKeys(scene.text, TEXT_KEYS, `${where}: text`, warnings);
+    if (kind === 'bars' && Array.isArray(scene.items)) for (const [k, item] of scene.items.entries()) unknownKeys(item, ['label', 'value'], `${where}: item ${k + 1}`, warnings);
+  }
+  for (const [i, effect] of (Array.isArray(story.sfx) ? story.sfx : []).entries()) {
+    unknownKeys(effect, SFX_KEYS, `sfx[${i}]`, warnings);
+    if (isObj(effect?.at)) unknownKeys(effect.at, TIME_KEYS, `sfx[${i}].at`, warnings);
+  }
+  for (const [i, text] of (Array.isArray(story.texts) ? story.texts : []).entries()) {
+    unknownKeys(text, TEXT_KEYS, `texts[${i}]`, warnings);
+    for (const when of ['at', 'until']) if (isObj(text?.[when])) unknownKeys(text[when], TIME_KEYS, `texts[${i}].${when}`, warnings);
+  }
+  for (const [i, drop] of (Array.isArray(story.drops) ? story.drops : []).entries()) unknownKeys(drop, TIME_KEYS, `drops[${i}]`, warnings);
+  return warnings;
+}
+
 /**
  * Validate and time a story. Returns everything a build needs: per scene its timeline start/end, clip in/out
  * (including the incoming transition), events, drops, sfx, texts, delivery and warnings.
@@ -266,12 +352,23 @@ export function compileStory(story) {
   const music = story.music === undefined ? {} : story.music;
   if (!isObj(music)) fail('music must be an object: {bpm, style?, mood?, seed?, file?}.');
   const bpm = num(music.bpm, 120, 40, 220, 'music.bpm');
+  // compose() silently falls back to 'pop' / the style's default mood and turns a
+  // non-numeric seed into a random one. Catch bad values here so the dry run and
+  // the build fail with INVALID_STORY instead of quietly composing another track.
+  if (music.style !== undefined && !Object.hasOwn(STYLES, music.style)) fail(`music.style must be one of ${Object.keys(STYLES).join(', ')}.`);
+  if (music.mood !== undefined && !Object.hasOwn(MOODS, music.mood)) fail(`music.mood must be one of ${Object.keys(MOODS).join(', ')}.`);
+  // studio_music takes an integer seed from 0 to 2147483647. Only a real
+  // number in that range is safe: coercing with Number() would also accept
+  // true, "", [], null and "42" and would leave that raw value in the story.
+  if (music.seed !== undefined && (typeof music.seed !== 'number' || !Number.isInteger(music.seed) || music.seed < 0 || music.seed > 2147483647)) fail('music.seed must be an integer from 0 to 2147483647.');
   const beat = 60 / bpm, bar = 4 * beat;
   const style = normalizeStyle(story.style);
   if (!Array.isArray(story.scenes) || !story.scenes.length || story.scenes.length > 60) fail('scenes needs 1 to 60 scenes.');
   const ids = new Set();
   const scenes = story.scenes.map((s, i) => normalizeScene(s, i, ids));
   const warnings = [];
+  // A key the format does not know is named instead of dropped: the typo becomes a warning, before the build.
+  warnings.push(...unknownStoryKeys(story));
   let t = 0, beatPos = 0;
   const events = {};
   for (const s of scenes) {
@@ -641,7 +738,7 @@ export const STORY_GUIDE = {
     footage: '{source:"/abs/clip.mp4", start, beats|end, framing?:"fill", zoom?, zoomEnd?, focusX?, focusXEnd?, brightness?, contrast?, saturation?, temperature?, gain?, text?} — no events inside; use {beat} there. A source range can be used once.',
   },
   story: '{version:"aes.story/1", name, deliver:"vertical-share"|"landscape-share"|"square"|"portrait", size:"720"|"1080"|"1440"|"4k", safeArea:"story"|"reels"|"tiktok"|"shorts"|"none", fps?, music:{bpm, style?, mood?, seed?, file?} (style composes a track, file uses yours, neither = silent), style:{accent, accent2, ink, muted, panel, background:{from,to}, font?, fontBody?, fontMono?, fontsDir?, grain?, grid?, glow?}, scenes:[…], drops?:[{beat}|{event}], sfx?:[{kind:"whoosh"|"hit"|"pop"|"riser"|"click"|"drop", at:{event}|{beat}, gain?}], texts?:[{text, at, beats|until, style?, position?}]}',
-  checks: 'Warnings: SHORT_SHOT (<0.8 s), READ_TIME (0.4 s + 0.22 s per word), TEXT_DISSOLVE, PARTIAL_BAR, DROP_OFF_BAR. Never invent facts, numbers or quotes: everything on screen must be something the user can stand behind.',
+  checks: 'Warnings: UNKNOWN_KEY (a key the format does not know, with the nearest name), SHORT_SHOT (<0.8 s), READ_TIME (0.4 s + 0.22 s per word), TEXT_DISSOLVE, PARTIAL_BAR, DROP_OFF_BAR. dryRun also checks every footage and music file and each source range, and fails with FILE_NOT_FOUND / INVALID_STORY like the build does. Never invent facts, numbers or quotes: everything on screen must be something the user can stand behind.',
   after: 'studio_apply returns projectId and starts the build: studio_wait {projectId, until:"idle"}. Then studio_storyboard, studio_render {formats:[renderFormat]}, studio_wait, studio_qc. Look at real frames before reporting.',
   example: {
     version: STORY_VERSION, name: 'Launch teaser', deliver: 'vertical-share', size: '1080', safeArea: 'reels',

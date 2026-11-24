@@ -9,13 +9,37 @@ import { StudioError, writeJsonAtomic } from './paths.mjs';
 import { findFfmpegTools, inspectFfmpeg } from './ffmpeg.mjs';
 import { runProcess } from './process.mjs';
 import { filterColors } from './render.mjs';
-import { layout, totalDuration } from '../public/edit-ops.js';
+import { layout, totalDuration, sectionSpans } from '../public/edit-ops.js';
 import { curvesFor, clipEnergy } from '../public/insights.js';
 import { mapCaptions, toSrt, toVtt } from '../public/captions.js';
+import { CJK_RE, splitWords } from '../public/transcript.js';
+// Width in "Latin units" for the fixed-size font used by the publish pack:
+// Han / Hiragana / Katakana and full-width punctuation take twice the room of
+// a Latin letter. Counting UTF-16 units for everything else keeps the
+// word-based wrapping of plain Latin titles byte-for-byte unchanged.
+// \u3040-\u30ff also covers Script=Common kana marks such as the prolonged
+// sound mark 'ー' (U+30FC), which are just as wide as the surrounding kana.
+const WIDE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\u3040-\u30ff\u31f0-\u31ff\uff00-\uffef]/u;
+const charWidth = ch => (WIDE_RE.test(ch) ? 2 : ch.length);
+function widthOf(text) {
+  let w = 0;
+  for (const ch of text) w += charWidth(ch);
+  return w;
+}
+/** Longest prefix of `text` (by code point, never splitting a surrogate pair) whose width fits `budget`. */
+function takeByWidth(text, budget) {
+  let out = '', w = 0;
+  for (const ch of text) {
+    const cw = charWidth(ch);
+    if (w + cw > budget) break;
+    out += ch; w += cw;
+  }
+  return out;
+}
 
 export const PUBLISH_PLATFORMS = Object.freeze({
-  youtube: { name: 'YouTube', titleMax: 100, descriptionMax: 5000, tags: [] },
-  shorts: { name: 'YouTube Shorts', titleMax: 100, descriptionMax: 5000, tags: ['shorts'] },
+  youtube: { name: 'YouTube', titleMax: 100, descriptionMax: 5000, tags: [], noAngleBrackets: true },
+  shorts: { name: 'YouTube Shorts', titleMax: 100, descriptionMax: 5000, tags: ['shorts'], noAngleBrackets: true },
   tiktok: { name: 'TikTok', titleMax: 0, descriptionMax: 2200, tags: [] },
   reels: { name: 'Instagram Reels', titleMax: 0, descriptionMax: 2200, tags: ['reels'] },
   x: { name: 'X', titleMax: 0, descriptionMax: 280, tags: [] },
@@ -35,11 +59,19 @@ const shorten = (text, max) => {
 };
 const filterPath = value => path.resolve(value).replaceAll('\\', '/').replace(':', '\\:').replaceAll("'", "\\'");
 
-/** YouTube-style chapters (first at 0:00, ≥3 chapters, ≥10 s apart) from labelled markers or clip labels. */
+const stripAngleBrackets = text => String(text).replaceAll('<', '‹').replaceAll('>', '›');
+
+/** YouTube-style chapters (first at 0:00, ≥3 chapters, ≥10 s apart): sections first, else labelled markers or clip labels. */
 export function chapters(clips, options = {}) {
   const total = totalDuration(clips);
-  let rows = (options.markers ?? []).filter(m => m.label).map(m => ({ time: m.time, title: clean(m.label, 60) }));
-  if (rows.length < 2) rows = layout(clips).filter(r => r.label && r.label !== 'hook').map(r => ({ time: r.visibleStart, title: clean(r.label, 60) }));
+  const sections = sectionSpans(clips, options.sections ?? []);
+  let rows;
+  if (sections.length) {
+    rows = sections.map(s => ({ time: s.start, title: clean(s.name, 60) }));
+  } else {
+    rows = (options.markers ?? []).filter(m => m.label).map(m => ({ time: m.time, title: clean(m.label, 60) }));
+    if (rows.length < 2) rows = layout(clips).filter(r => r.label && r.label !== 'hook').map(r => ({ time: r.visibleStart, title: clean(r.label, 60) }));
+  }
   rows = rows.filter(r => r.time < total - 10).sort((a, b) => a.time - b.time);
   const out = [];
   for (const r of rows) if (!out.length || r.time - out.at(-1).time >= 10) out.push(r);
@@ -47,8 +79,33 @@ export function chapters(clips, options = {}) {
   return out.length >= 3 ? out.map(r => ({ time: Math.round(r.time), title: r.title, line: `${fmt(r.time)} ${r.title}` })) : [];
 }
 
+// Chinese and Japanese have no spaces: [\p{L}\p{N}]{4,} would turn a whole
+// clause into one tag (#92). splitWords() is the shared CJK helper from the
+// transcript module (Intl.Segmenter, no dependency); keep word-sized pieces and
+// drop the same kind of function words the Latin stop list below removes.
+// Voiced kana (ゲ, ヴ) survive the accent fold below (NFC recomposes them), and
+// this helper never strips combining marks of its own (#88).
+const CJK_STOP = new Set([
+  '我们', '你们', '他们', '大家', '一个', '这个', '那个', '这些', '那些', '这里', '那里',
+  '什么', '怎么', '因为', '所以', '但是', '而且', '以及', '可以', '已经', '还是',
+  'した', 'です', 'ます', 'して', 'いる', 'ある', 'こと', 'もの', 'ため', 'から', 'まで',
+]);
+function cjkHashtagWords(token) {
+  return splitWords(token)
+    .map(part => part.replace(/[^\p{L}\p{N}]+/gu, ''))
+    .filter(part => [...part].length >= 2 && !CJK_STOP.has(part));
+}
+
 export function hashtags(...texts) {
- const words = texts.join(' ').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').normalize('NFC').match(/[\p{L}\p{N}]{4,}/gu) ?? [];
+ // Tokens are the same maximal [\p{L}\p{N}] runs the old {4,} regex found.
+ // For Latin nothing changes: only runs of 4+ characters become candidates.
+ // For CJK a word is 2-3 characters, so a short title such as 新作 must not be
+ // thrown away just because the Latin threshold is four.
+ const folded = texts.join(' ').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').normalize('NFC');
+ const words = folded.split(/[^\p{L}\p{N}]+/u).filter(Boolean).flatMap(token => {
+   if (CJK_RE.test(token)) return cjkHashtagWords(token);
+   return [...token].length >= 4 ? [token] : [];
+ });
   const stop = new Set(['with', 'this', 'that', 'from', 'your', 'have', 'will', 'what', 'when', 'into', 'over', 'they', 'them', 'voor', 'naar', 'deze', 'met', 'maar', 'niet', 'zijn', 'wordt', 'worden', 'onze', 'jouw', 'heeft', 'more', 'than', 'just', 'like',
     // common English and Dutch function words of 4+ letters (#61) — without them they fill the
     // first five tags and push the real topic words out
@@ -81,16 +138,18 @@ export function metadataDrafts({ title, brief, cta, chapterList = [], tags = [],
   const out = {};
   for (const id of platforms) {
     const p = PUBLISH_PLATFORMS[id]; if (!p) continue;
+    const sanitize = p.noAngleBrackets ? stripAngleBrackets : text => text;
+    const platformBase = sanitize(base);
     const list = uniqueHashtags([...p.tags, ...tags]).slice(0, id === 'x' ? 2 : 6).map(t => `#${t}`);
     // The call to action, the chapter list and the hashtags have to survive the cut, so the brief is what gets shortened.
-    const tail = [cta ? clean(cta, 100) : '', id === 'youtube' && chapterList.length ? `\n${chapterList.map(c => c.line).join('\n')}` : '', list.join(' ')].filter(Boolean);
+    const tail = [cta ? sanitize(clean(cta, 100)) : '', id === 'youtube' && chapterList.length ? `\n${chapterList.map(c => sanitize(c.line)).join('\n')}` : '', list.join(' ')].filter(Boolean);
     const fixed = tail.length ? `\n\n${tail.join('\n\n')}` : '';
-    let head = about || base;
+    let head = sanitize(about) || platformBase;
     if (head.length + fixed.length > p.descriptionMax) head = shorten(head, p.descriptionMax - fixed.length);
     const pieces = [head, ...tail].filter(Boolean);
     let description = pieces.join('\n\n');
     if (description.length > p.descriptionMax) description = shorten(description, p.descriptionMax);
-    out[id] = { platform: p.name, ...(p.titleMax ? { title: cut(base, p.titleMax) } : {}), description, hashtags: list, draft: true };
+    out[id] = { platform: p.name, ...(p.titleMax ? { title: cut(platformBase, p.titleMax) } : {}), description, hashtags: list, draft: true };
   }
   return out;
 }
@@ -157,13 +216,39 @@ async function renderStill({ source, time, out, width, height, focusX = 0.5, foc
     '-frames:v', '1', '-vf', vf, '-q:v', '2', out], { timeoutMs: 60_000 });
 }
 export function wrapTitle(text, max) {
+  const value = String(text ?? '');
   const lines = []; let line = '';
-  for (const word of text.split(' ')) { if (line && (line + ' ' + word).length > max) { lines.push(line); line = ''; } line += (line ? ' ' : '') + word; }
+  for (const word of value.split(' ')) {
+    // A word containing wide (CJK / full-width) characters can be wider than
+    // the whole line budget by itself. Cut it into width-sized pieces, flushing
+    // the line built so far first. This is the same code path for a title with
+    // no spaces and for a spaced title with a long CJK run (#97).
+    if (WIDE_RE.test(word) && widthOf(word) > max) {
+      if (line) { lines.push(line); line = ''; }
+      let rest = word;
+      while (widthOf(rest) > max) {
+        let piece = takeByWidth(rest, max);
+        if (!piece) piece = [...rest][0]; // a single code point wider than max
+        lines.push(piece);
+        rest = rest.slice(piece.length);
+      }
+      line = rest; // the last piece can still take following words
+      continue;
+    }
+    // For text without wide characters widthOf() equals .length, so Latin
+    // titles wrap byte-for-byte as they did before this change.
+    if (line && widthOf(line + ' ' + word) > max) { lines.push(line); line = ''; }
+    line += (line ? ' ' : '') + word;
+  }
   if (line) lines.push(line);
   if (lines.length > 3) {
+    // Reserve one unit for the ellipsis, so the last line plus '…' still fits
+    // inside `max` units (six CJK characters plus '…' would be one too wide).
+    const budget = max - 1;
     const last = lines[2];
-    const boundary = last.lastIndexOf(' ', max - 1);
-    const shortened = last.length < max ? last : last.slice(0, boundary > 0 ? boundary : max - 1);
+    const boundary = last.lastIndexOf(' ', budget);
+    const shortened = widthOf(last) <= budget ? last
+      : takeByWidth(boundary > 0 ? last.slice(0, boundary) : last, budget);
     lines[2] = shortened.replace(/[\uD800-\uDBFF]$/, '') + '…';
   }
   return lines.slice(0, 3).join('\n');
@@ -209,7 +294,10 @@ export async function buildPublishPack(project, dir, request = {}, { brand = nul
   }
   const chapterList = chapters(project.plan.clips, project.options);
   const tags = uniqueHashtags([...(brand?.hashtags ?? []), ...hashtags(title, project.options.brief ?? '')]).slice(0, 6);
-  const drafts = metadataDrafts({ title, brief: project.options.brief, cta: project.options.endTitle, chapterList, tags, platforms });
+  // #104: an empty endTitle is no call to action. metadataDrafts already drops
+  // a falsy cta; say it here too so a blank line is never mistaken for one.
+  const cta = project.options.endTitle || undefined;
+  const drafts = metadataDrafts({ title, brief: project.options.brief, cta, chapterList, tags, platforms });
   const md = [`# ${title}`, '', `Revision ${project.revision} · ${totalDuration(project.plan.clips).toFixed(1)} s · drafts — review before posting.`, '',
     ...(chapterList.length ? ['## Chapters', '', ...chapterList.map(c => c.line), ''] : []),
     ...Object.values(drafts).flatMap(d => [`## ${d.platform}`, '', ...(d.title ? [`**Title:** ${d.title}`, ''] : []), d.description, '']),
