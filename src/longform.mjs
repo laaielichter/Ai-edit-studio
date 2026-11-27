@@ -252,6 +252,26 @@ const pad2 = n => String(n).padStart(2, '0');
 /** Exact rates as rationals (SMPTE): 29.97 is really 30000/1001, 23.976 is 24000/1001. */
 const FPS_RATES = new Map([[23.976, [24000, 1001]], [24, [24, 1]], [25, [25, 1]], [29.97, [30000, 1001]], [30, [30, 1]], [50, [50, 1]], [59.94, [60000, 1001]], [60, [60, 1]]]);
 const rateOf = fps => FPS_RATES.get(Number(fps)) ?? [Math.max(1, Math.round(Number(fps))) || 30, 1];
+/** The rates the exporters can write, in the order the tool description lists them. */
+export const EXPORT_FPS = [...FPS_RATES.keys()];
+/** The rate of an export (#82): the one asked for, else the edit's first video source, else 30 for stills.
+ * A named rate that cannot be written throws instead of quietly exporting at 30. */
+export function exportFps(wanted, clips = [], sources = []) {
+  if (wanted !== undefined && wanted !== null) {
+    const rate = Number(wanted);
+    if (!EXPORT_FPS.includes(rate)) throw new Error(`fps must be one of ${EXPORT_FPS.join(', ')}, not "${wanted}".`);
+    return rate;
+  }
+  const order = [];
+  for (const clip of clips) if (Number.isInteger(clip?.sourceIndex) && !order.includes(clip.sourceIndex)) order.push(clip.sourceIndex);
+  for (let i = 0; i < sources.length; i++) if (!order.includes(i)) order.push(i);
+  for (const index of order) {
+    const rate = Number(sources[index]?.video?.fps);
+    if (!(rate > 0)) continue; // a still image has no rate of its own
+    return EXPORT_FPS.reduce((best, choice) => (Math.abs(choice - rate) < Math.abs(best - rate) ? choice : best), EXPORT_FPS[0]);
+  }
+  return 30;
+}
 /** SMPTE 12M drop-frame timecode for 29.97/59.94: frame numbers 0 and 1 (0–3 at 59.94) are skipped at the start of every minute except every tenth. */
 export function dropFrameTimecode(frames, base) {
   const drop = base >= 60 ? 4 : 2, per10 = base * 600 - 9 * drop, perMin = base * 60 - drop;

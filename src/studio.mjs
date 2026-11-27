@@ -24,7 +24,7 @@ import { decodeFrames, motionTrack, focusFromTrack, reframeOperations, ASPECTS }
 import { buildPublishPack } from './publish.mjs';
 import { listBrands, saveBrand, getBrand, readBrandSnapshot, brandOptions, brandRenderOptions } from './brand.mjs';
 import { findClips } from './clips.mjs';
-import { fitDuration, searchProject, assembleFromScript, multicamPlan, exportTimeline } from './longform.mjs';
+import { fitDuration, searchProject, assembleFromScript, multicamPlan, exportTimeline, exportFps } from './longform.mjs';
 import { syncSources } from './sync.mjs';
 import { sectionSpans, suggestSections, oneSectionPerShot } from '../public/edit-ops.js';
 import { qcFile } from './qc.mjs';
@@ -1479,7 +1479,9 @@ export async function multicamProject(id, request = {}) {
 export async function exportTimelineProject(id, request = {}) {
   const project = await getProject(id);
   if (!project.plan) throw new StudioError('PLAN_REQUIRED', 'Create an edit first.');
-  const fps = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60].includes(Number(request.fps)) ? Number(request.fps) : 30;
+  let fps;
+  try { fps = exportFps(request.fps, project.plan.clips, project.sources); }
+  catch (e) { throw new StudioError('INVALID_ARGUMENTS', e.message); }
   let out;
   try { out = exportTimeline({ format: request.format ?? 'edl', clips: project.plan.clips, sources: project.sources, options: project.options, name: project.name, fps }); }
   catch (e) { throw new StudioError('INVALID_ARGUMENTS', e.message); }
