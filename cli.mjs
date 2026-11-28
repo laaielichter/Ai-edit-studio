@@ -53,6 +53,33 @@ export function parseArguments(values) {
   return { positional, flags };
 }
 
+const SETUP_FLAGS = {
+  install: ['data-root', 'claude', 'codex', 'desktop', 'cursor', 'dry-run', 'json'],
+  uninstall: ['data-root', 'claude', 'codex', 'desktop', 'cursor', 'dry-run', 'json'],
+  'codex-setup': ['data-root', 'plugin', 'uninstall', 'dry-run', 'json'],
+};
+
+/** install, uninstall and codex-setup change files: refuse a mistyped flag before anything is written (#170). */
+export function checkSetupFlags(command, flags) {
+  const allowed = SETUP_FLAGS[command];
+  if (!allowed) return;
+  for (const [flag, value] of Object.entries(flags)) {
+    if (allowed.includes(flag)) continue;
+    const typed = value === false ? `--no-${flag}` : `--${flag}`;
+    throw new StudioError('UNKNOWN_FLAG', `${typed} is not an option of ${command}; nothing was changed. Options: ${usageOf(command)}.`);
+  }
+  const root = flags['data-root'];
+  if (root !== undefined && (typeof root !== 'string' || !root.trim())) {
+    throw new StudioError('INVALID_DATA_ROOT', `--data-root needs a folder, for example: node cli.mjs ${command} --data-root D:\\AI-Edit-Studio. Nothing was changed.`);
+  }
+}
+
+function usageOf(command) {
+  return command === 'codex-setup'
+    ? '--data-root <folder>, --plugin, --uninstall, --dry-run'
+    : '--data-root <folder>, --no-claude, --no-codex, --no-desktop, --no-cursor, --dry-run, --json';
+}
+
 function boolFlag(value, fallback = false) {
   if (value === undefined) return fallback;
   if (typeof value === 'boolean') return value;
@@ -244,6 +271,10 @@ async function main() {
   const { positional, flags } = parseArguments(args);
   const [command, subcommand, third] = positional;
   const jsonMode = boolFlag(flags.json, false);
+  if (command === 'studio' &&
+      (!subcommand || subcommand === 'help' || subcommand === '-h')) {
+    return help();
+  }
   if (command === 'studio' && subcommand && flags.help) return console.log(studioHelp(subcommand));
   if (!command || command === 'help' || flags.help) return help();
   // MCP over stdio for `npx -y ai-edit-studio mcp` (the registry entry uses this). Print nothing before it starts.
@@ -256,6 +287,7 @@ async function main() {
     const { speechStatus } = await import('./src/transcribe.mjs');
     return print({ ok: info.capabilities.nvencReady || info.capabilities.libx264, ...info, storage, speech: await speechStatus().catch(e => ({ ready: false, error: e.message })) }, jsonMode);
   }
+  checkSetupFlags(command, flags);
   if (command === 'install' || command === 'uninstall') {
     const { install, formatReport } = await import('./src/install.mjs');
     const clients = Object.fromEntries(['claude', 'codex', 'desktop', 'cursor'].map(id => [id, flags[id] !== false]));
