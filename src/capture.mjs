@@ -21,6 +21,18 @@ const GRACEFUL_STOP_MS = 10_000;
 const TERMINATE_STOP_MS = 5_000;
 const FORCE_STOP_MS = 5_000;
 const BUSY_STATES = new Set(['starting', 'recording', 'stopping', 'finalizing', 'orphaned']);
+/** The three rates this backend can record at; a capture is not like `run --fps` (#173). */
+export const CAPTURE_FPS = [30, 60, 120];
+
+/** Only an omitted rate defaults to 60. Anything else that cannot be recorded is an
+ * error, not a silent replacement — the caller must see what it asked for. */
+export function captureFps(fps) {
+  const rate = fps === undefined || fps === null || fps === '' ? 60 : Number(fps);
+  if (!CAPTURE_FPS.includes(rate)) {
+    throw new StudioError('INVALID_FPS', `fps must be 30, 60 or 120 for a capture, got ${String(fps)}.`);
+  }
+  return rate;
+}
 
 function powershellPath() {
   const system = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
@@ -506,6 +518,9 @@ export class CaptureManager {
     fps = 60,
     audioDevice = '',
   } = {}) {
+    // Validate before the busy check and before any state is assigned, so a bad
+    // rate cannot start a recording or leave a session behind (#173).
+    const rate = captureFps(fps);
     if (this.session || BUSY_STATES.has(this.state.state)) {
       throw new StudioError('CAPTURE_BUSY', 'A recording or finalization is already running.', {
         sessionId: this.state.sessionId,
@@ -546,7 +561,7 @@ export class CaptureManager {
       process: null,
       processName: null,
       project: String(project ?? '').trim() || 'Game capture',
-      fps: [30, 60, 120].includes(Number(fps)) ? Number(fps) : 60,
+      fps: rate,
       audioDevice: audioDevice || null,
       requestedAt: new Date().toISOString(),
       startedAt: null,
