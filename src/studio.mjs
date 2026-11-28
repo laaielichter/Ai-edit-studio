@@ -1479,16 +1479,23 @@ export async function multicamProject(id, request = {}) {
 export async function exportTimelineProject(id, request = {}) {
   const project = await getProject(id);
   if (!project.plan) throw new StudioError('PLAN_REQUIRED', 'Create an edit first.');
-  let fps;
-  try { fps = exportFps(request.fps, project.plan.clips, project.sources); }
+  let rate;
+  try { rate = exportFps(request.fps, project.plan.clips, project.sources); }
   catch (e) { throw new StudioError('INVALID_ARGUMENTS', e.message); }
+  const { fps, from, sourceRates } = rate;
   let out;
   try { out = exportTimeline({ format: request.format ?? 'edl', clips: project.plan.clips, sources: project.sources, options: project.options, name: project.name, fps }); }
   catch (e) { throw new StudioError('INVALID_ARGUMENTS', e.message); }
   const dir = path.join(folder(id), 'timeline-exports'); await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${project.name.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 40) || 'edit'} rev${project.revision}.${out.extension}`);
   await fs.writeFile(file, out.content, 'utf8');
-  return { format: request.format ?? 'edl', fps, file, mime: out.mime, bytes: Buffer.byteLength(out.content), content: out.content.length > 200_000 ? `${out.content.slice(0, 200_000)}\n…` : out.content, ...(out.warnings?.length ? { warnings: out.warnings } : {}),
+  // #82: an edit with mixed-rate sources is written at one rate; say which other rates were left behind.
+  const warnings = [...(out.warnings ?? [])];
+  if (sourceRates.length > 1) {
+    const others = sourceRates.slice(1).map(r => Math.round(r * 1000) / 1000);
+    warnings.push(`Mixed-rate sources: the whole edit is written at ${fps} fps${from === 'source' ? ' from the first video source' : ''}; other sources are ${others.join(', ')} fps.`);
+  }
+  return { format: request.format ?? 'edl', fps, fpsSource: from, file, mime: out.mime, bytes: Buffer.byteLength(out.content), content: out.content.length > 200_000 ? `${out.content.slice(0, 200_000)}\n…` : out.content, ...(warnings.length ? { warnings } : {}),
     note: { edl: 'CMX3600 for Premiere, Resolve and Avid (cuts, speed via M2; transitions as comments).', fcpxml: 'FCPXML 1.9 for Final Cut Pro and DaVinci Resolve.', otio: 'OpenTimelineIO for Resolve, Premiere (via plugin) and pipelines (cuts, speed and transitions).', srt: 'Timeline-timed SubRip captions mapped through cuts and clip speed, including caption offset.', vtt: 'Timeline-timed WebVTT captions mapped through cuts and clip speed, including caption offset.', csv: 'Shot list for spreadsheets.', chapters: 'YouTube chapters from sections or labelled markers.' }[request.format ?? 'edl'] };
 }
 
