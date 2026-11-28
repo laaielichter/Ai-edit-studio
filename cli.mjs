@@ -229,6 +229,18 @@ export function requestFromFlags(flags, inputOverride = '') {
   };
 }
 
+// Like requestFromFlags: send what was typed so the server can name it in the
+// error. Number(flags.fps || 60) used to turn `abc` into NaN (JSON null) (#173).
+export function captureStartRequest(flags) {
+  const body = {
+    process: flags.process,
+    project: flags.project || 'Game capture',
+    audioDevice: flags['audio-device'] || '',
+  };
+  if (flags.fps !== undefined) body.fps = flags.fps;
+  return body;
+}
+
 async function waitForJob(jobId) {
   while (true) {
     const payload = await api(`/jobs/${encodeURIComponent(jobId)}`);
@@ -322,12 +334,7 @@ async function main() {
       if (!flags.process) throw new StudioError('PROCESS_REQUIRED', 'Use --process <name.exe|PID>.');
       const payload = await api('/capture/start', {
         method: 'POST',
-        body: {
-          process: flags.process,
-          project: flags.project || 'Game capture',
-          fps: Number(flags.fps || 60),
-          audioDevice: flags['audio-device'] || '',
-        },
+        body: captureStartRequest(flags),
       });
       return print(payload.capture, jsonMode);
     }
