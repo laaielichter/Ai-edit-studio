@@ -32,7 +32,8 @@ plain `ffmpeg` formula cannot draw text or captions.
 
 Apps installed later? Run the installer again — it is safe to repeat, also for upgrades (unzip the new version, run its
 installer; your projects stay where they are). Options: `--no-claude`, `--no-codex`, `--no-desktop`, `--no-cursor`,
-`--dry-run`. Remove the connections with `node cli.mjs uninstall` (projects and renders are kept).
+`--dry-run`. A mistyped option, or `--data-root` without a folder, is refused before anything is changed. Remove the
+connections with `node cli.mjs uninstall` (projects and renders are kept).
 
 ## First thing to try
 

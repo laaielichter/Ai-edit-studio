@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { agentTools, runStudioCommand } from '../src/agent-tools.mjs';
-import { parseArguments, validatePort } from '../cli.mjs';
+import { checkSetupFlags, parseArguments, validatePort } from '../cli.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -272,4 +272,51 @@ test('an unknown tool lists the tools and suggests a close name (#101)', async (
       && /Did you mean auto_edit\?/.test(err.message)
       && /Tools: /.test(err.message),
   );
+});
+
+test('install, uninstall and codex-setup refuse a mistyped option before writing anything (#170)', t => {
+  const home = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ai-edit-setup-flags-'));
+  const empty = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ai-edit-setup-path-'));
+  t.after(() => Promise.all([home, empty].map(dir => fs.rm(dir, { recursive: true, force: true }))));
+  const env = {
+    ...process.env, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'),
+    XDG_CONFIG_HOME: path.join(home, '.config'), CODEX_HOME: path.join(home, '.codex'), PATH: empty, Path: empty,
+    GAME_TRAILER_STUDIO_DATA_ROOT: path.join(home, 'data'), AI_EDIT_STUDIO_HOME: '',
+  };
+  const cases = [
+    [['install', '--dryrun'], 'UNKNOWN_FLAG', /--dryrun is not an option of install/],
+    [['install', '--no-claud'], 'UNKNOWN_FLAG', /--no-claud is not an option of install/],
+    [['install', '--data-root'], 'INVALID_DATA_ROOT', /--data-root needs a folder/],
+    [['install', '--data-root', '--dry-run'], 'INVALID_DATA_ROOT', /--data-root needs a folder/],
+    [['install', '--data-root='], 'INVALID_DATA_ROOT', /--data-root needs a folder/],
+    [['uninstall', '--no-cursr'], 'UNKNOWN_FLAG', /--no-cursr is not an option of uninstall/],
+    [['codex-setup', '--plugn'], 'UNKNOWN_FLAG', /--plugn is not an option of codex-setup/],
+    [['codex-setup', '--data-root'], 'INVALID_DATA_ROOT', /--data-root needs a folder/],
+  ];
+  for (const [args, code, message] of cases) {
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'cli.mjs'), ...args], {
+      cwd: home, encoding: 'utf8', env, timeout: 20_000,
+    });
+    assert.equal(result.status, 1, `exit code for ${args.join(' ')}: ${result.stdout}${result.stderr}`);
+    const record = JSON.parse(result.stderr);
+    assert.equal(record.error.code, code, args.join(' '));
+    assert.match(record.error.message, message, args.join(' '));
+    assert.match(record.error.message, /nothing was changed/i, args.join(' '));
+    assert.equal(result.stdout, '', args.join(' '));
+    assert.deepEqual(fsSync.readdirSync(home), [], `${args.join(' ')} must not write any file`);
+  }
+});
+
+test('the documented setup options are still accepted (#170)', () => {
+  for (const command of ['install', 'uninstall']) {
+    assert.doesNotThrow(() => checkSetupFlags(command, {
+      'data-root': '/tmp/ai-edit', claude: false, codex: false, desktop: false, cursor: false, 'dry-run': true, json: true,
+    }));
+  }
+  assert.doesNotThrow(() => checkSetupFlags('codex-setup', { 'data-root': '/tmp/ai-edit', plugin: true, uninstall: true, 'dry-run': true }));
+  assert.doesNotThrow(() => checkSetupFlags('install', {}));
+  assert.doesNotThrow(() => checkSetupFlags('jobs', { anything: true }), 'other commands are unchanged');
+  assert.throws(() => checkSetupFlags('install', { 'data-root': false }), error => error.code === 'INVALID_DATA_ROOT');
+  assert.throws(() => checkSetupFlags('codex-setup', { 'no-claude': true }), error => error.code === 'UNKNOWN_FLAG'
+    && /--data-root <folder>, --plugin, --uninstall, --dry-run/.test(error.message));
 });
