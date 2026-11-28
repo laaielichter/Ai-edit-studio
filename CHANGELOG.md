@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`install`, `uninstall` and `codex-setup` refuse an option they do not know:** `install --dryrun` (a typo) used to do a real install and `--no-claud` still installed into Claude Code. An unknown option now fails with `UNKNOWN_FLAG`, names the option as typed and lists the valid ones, and `--data-root` without a folder fails with `INVALID_DATA_ROOT`, both before any file is changed. Thanks to @Aadithya-kl! (#170, #171)
 - **`studio`, `studio -h` and `studio help` print the help:** they used to answer `UNKNOWN_TOOL`; now they print the same help as `studio --help` and exit 0, while `studio <tool> --help` and an unknown tool name behave as before. Thanks to @RealBhupesh! (#89, #115)
 - **Story styles accept short `#rgb` colours:** they are expanded to lowercase `#rrggbb`, six-digit colours and the defaults are unchanged, and an invalid colour names the full field, such as `style.background.from`. Thanks to @RealBhupesh! (#103, #116)
 - **YouTube and Shorts drafts no longer contain `<` or `>`:** YouTube refuses both characters in titles and descriptions, so the publish pack now replaces them with the look-alikes `‹` and `›` in the title, brief, call to action and chapter lines of the `youtube` and `shorts` drafts, before the length checks so the description limit still holds. Other platforms keep the text as written. Thanks to @MM071022! (#72, #76)
